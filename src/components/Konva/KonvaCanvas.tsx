@@ -4,7 +4,9 @@ import { Grid, Wall, Labels } from "./shapes";
 import type { Coordinate, Label } from "./shapes";
 
 interface CoordinateCanvasProps {
-  // optional points array; component will fall back to a hardcoded set if none provided
+  // optional collection of wall segments (each segment is a polyline)
+  segments?: Coordinate[][];
+  // optional points array; retained for backwards compatibility
   points?: Coordinate[];
   // array of textual labels to place on the stage
   labels?: Label[];
@@ -15,6 +17,7 @@ interface CoordinateCanvasProps {
 }
 
 const CoordinateCanvas: React.FC<CoordinateCanvasProps> = ({
+  segments,
   points,
   labels,
   resolution,
@@ -27,9 +30,17 @@ const CoordinateCanvas: React.FC<CoordinateCanvasProps> = ({
     { x: 200, y: 150, label: "C" },
     { x: 20, y: 20, label: "D" },
   ];
-  const effectivePoints = points && points.length > 0 ? points : defaultPoints;
-
   const scale = resolution ?? 1;
+
+  // determine which geometry to render
+  let effectivePoints: Coordinate[];
+  if (segments && segments.length > 0) {
+    // flatten only for the debug circles/text
+    effectivePoints = segments.flat();
+  } else {
+    effectivePoints = points && points.length > 0 ? points : defaultPoints;
+  }
+
   const scaledPoints = effectivePoints.map((p) => ({
     x: p.x * scale,
     y: p.y * scale,
@@ -106,7 +117,17 @@ const CoordinateCanvas: React.FC<CoordinateCanvasProps> = ({
             <Grid dimensions={dimensions} gridSize={gridSize} />
 
             {/* walls rendered using the new Wall shape */}
-            <Wall points={scaledPoints} thickness={wallThickness ?? 6} />
+            {segments && segments.length > 0 ? (
+              segments.map((seg, idx) => (
+                <Wall
+                  key={`seg-${idx}`}
+                  points={seg.map((p) => ({ x: p.x * scale, y: p.y * scale }))}
+                  thickness={wallThickness ?? 6}
+                />
+              ))
+            ) : (
+              <Wall points={scaledPoints} thickness={wallThickness ?? 6} />
+            )}
 
             {/* custom text labels */}
             {scaledLabels && <Labels labels={scaledLabels} />}

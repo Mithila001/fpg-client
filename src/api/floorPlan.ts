@@ -1,70 +1,34 @@
 import client from "./client";
-import type { Coordinate, Label } from "../components/Konva/shapes/types";
+import type { Coordinate } from "../components/Konva/shapes/types";
 
-export interface WallSegment {
-  start: [number, number];
-  end: [number, number];
+// response shape returned by the formatting algorithm
+export interface FormatResponse {
+  merged_horiz: Record<string, [number, number][][]>;
+  merged_vert: Record<string, [number, number][][]>;
 }
 
-export interface Room {
-  name: string;
-  type: string;
-  center: [number, number];
-}
-
-export interface FloorPlan {
-  walls: WallSegment[];
-  rooms: Room[];
-}
-
-export async function fetchFloorPlan(): Promise<FloorPlan> {
-  const response = await client.get<FloorPlan>("/dev/formatter-floor-plan");
+// call the backend formatter endpoint and return the raw data
+export async function fetchFormattedPlan(): Promise<FormatResponse> {
+  const response = await client.get<FormatResponse>("/algorithms/format");
   return response.data;
 }
 
-// the raw layout endpoint uses the same response format
-// the raw layout endpoint returns polygons instead of wall segments
-interface RawFloorPlan {
-  polygons: [number, number][][];
-  rooms: Room[];
-}
+// convert a FormatResponse into an array of polyline segments
+export function formatResponseToSegments(resp: FormatResponse): Coordinate[][] {
+  const segments: Coordinate[][] = [];
 
-export async function fetchRawFloorPlan(): Promise<FloorPlan> {
-  const response = await client.get<RawFloorPlan>("/dev/raw-floor-plan");
-  const raw = response.data;
-
-  // convert polygons to wall segments by walking each polygon boundary
-  const walls: WallSegment[] = [];
-  raw.polygons.forEach((poly) => {
-    for (let i = 0; i < poly.length; i++) {
-      const start = poly[i];
-      const end = poly[(i + 1) % poly.length];
-      walls.push({ start: [start[0], start[1]], end: [end[0], end[1]] });
-    }
-  });
-
-  return {
-    walls,
-    rooms: raw.rooms,
+  const convert = (map: Record<string, [number, number][][]>) => {
+    Object.values(map).forEach((polylines) => {
+      polylines.forEach((poly) => {
+        const coords: Coordinate[] = poly.map((pt) => ({ x: pt[0], y: pt[1] }));
+        if (coords.length > 0) segments.push(coords);
+      });
+    });
   };
+
+  convert(resp.merged_horiz);
+  convert(resp.merged_vert);
+
+  return segments;
 }
 
-export function wallsToPoints(walls: WallSegment[]): Coordinate[] {
-  if (walls.length === 0) return [];
-  const points: Coordinate[] = [];
-  walls.forEach((wall) => {
-    points.push({ x: wall.start[0], y: wall.start[1] });
-  });
-  // close by adding the end of the last wall
-  const last = walls[walls.length - 1];
-  points.push({ x: last.end[0], y: last.end[1] });
-  return points;
-}
-
-export function roomsToLabels(rooms: Room[]): Label[] {
-  return rooms.map((room) => ({
-    x: room.center[0],
-    y: room.center[1],
-    text: room.name,
-  }));
-}
