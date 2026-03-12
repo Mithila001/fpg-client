@@ -1,10 +1,11 @@
 import React, { useState, useEffect } from "react";
 import CoordinateCanvas from "../components/Konva/KonvaCanvas";
-import { fetchFormattedPlan, formatResponseToSegments } from "../api/floorPlan";
-import type { Coordinate } from "../components/Konva/shapes/types";
+import { fetchFormattedPlan, formatResponseToSegments, roomsToLabels } from "../api/floorPlan";
+import type { Coordinate, Label } from "../components/Konva/shapes/types";
 
 const Home: React.FC = () => {
   const [segments, setSegments] = useState<Coordinate[][] | null>(null);
+  const [labels, setLabels] = useState<Label[] | null>(null);
   const [loading, setLoading] = useState(false);
   const [error, setError] = useState<string | null>(null);
 
@@ -16,6 +17,7 @@ const Home: React.FC = () => {
       try {
         const data = await fetchFormattedPlan();
         setSegments(formatResponseToSegments(data));
+        setLabels(roomsToLabels(data.rooms));
       } catch (err) {
         setError("Failed to load formatted plan. Is the backend running?");
         console.error(err);
@@ -40,6 +42,7 @@ const Home: React.FC = () => {
             {segments !== null && (
               <CoordinateCanvas
                 segments={segments}
+                labels={labels ?? undefined}
                 resolution={20}
                 wallThickness={8}
               />

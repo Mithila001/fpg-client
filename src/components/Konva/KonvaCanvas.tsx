@@ -23,34 +23,37 @@ const CoordinateCanvas: React.FC<CoordinateCanvasProps> = ({
   resolution,
   wallThickness,
 }) => {
-  // default geometry in case caller doesn’t supply any coordinates
-  const defaultPoints: Coordinate[] = [
-    { x: 20, y: 20, label: "A" },
-    { x: 120, y: 80, label: "B" },
-    { x: 200, y: 150, label: "C" },
-    { x: 20, y: 20, label: "D" },
-  ];
   const scale = resolution ?? 1;
 
-  // determine which geometry to render
-  let effectivePoints: Coordinate[];
+  // determine which geometry to render (flatten segments for debugging)
+  let effectivePoints: Coordinate[] = [];
   if (segments && segments.length > 0) {
-    // flatten only for the debug circles/text
     effectivePoints = segments.flat();
-  } else {
-    effectivePoints = points && points.length > 0 ? points : defaultPoints;
+  } else if (points && points.length > 0) {
+    effectivePoints = points;
+  }
+
+  // compute offset so the minimum coordinate isn't at the very edge
+  const margin = 100;
+  let offsetX = 0;
+  let offsetY = 0;
+  if (effectivePoints.length > 0) {
+    const minX = Math.min(...effectivePoints.map((p) => p.x));
+    const minY = Math.min(...effectivePoints.map((p) => p.y));
+    offsetX = margin - minX * scale;
+    offsetY = margin - minY * scale;
   }
 
   const scaledPoints = effectivePoints.map((p) => ({
-    x: p.x * scale,
-    y: p.y * scale,
+    x: p.x * scale + offsetX,
+    y: p.y * scale + offsetY,
     label: p.label,
   }));
 
   const scaledLabels: Label[] | undefined = labels
     ? labels.map((l) => ({
-        x: l.x * scale,
-        y: l.y * scale,
+        x: l.x * scale + offsetX,
+        y: l.y * scale + offsetY,
         text: l.text,
         fontSize: l.fontSize,
         color: l.color,
@@ -121,7 +124,10 @@ const CoordinateCanvas: React.FC<CoordinateCanvasProps> = ({
               segments.map((seg, idx) => (
                 <Wall
                   key={`seg-${idx}`}
-                  points={seg.map((p) => ({ x: p.x * scale, y: p.y * scale }))}
+                  points={seg.map((p) => ({
+                    x: p.x * scale + offsetX,
+                    y: p.y * scale + offsetY,
+                  }))}
                   thickness={wallThickness ?? 6}
                 />
               ))
