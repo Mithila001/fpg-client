@@ -65,7 +65,33 @@ const CoordinateCanvas: React.FC<CoordinateCanvasProps> = ({
 
   // grid configuration
   const baseGridSize = 50;
-  const gridSize = baseGridSize * scale; // pixels between lines, scaled
+
+  // start with a simple scale-based grid size, but if we have geometry
+  // compute a "dynamic" grid spacing so the number of cells between the
+  // minimum and maximum coordinate stays roughly constant regardless of the
+  // raw coordinate values.  This keeps a small floor plan from being
+  // overwhelmed by a huge grid and a large plan from having only a handful of
+  // lines.
+  let gridSize = baseGridSize * scale; // fallback value
+  if (effectivePoints.length > 0) {
+    const maxX = Math.max(...effectivePoints.map((p) => p.x));
+    const maxY = Math.max(...effectivePoints.map((p) => p.y));
+    const minX = Math.min(...effectivePoints.map((p) => p.x));
+    const minY = Math.min(...effectivePoints.map((p) => p.y));
+
+    const rangeX = (maxX - minX) * scale;
+    const rangeY = (maxY - minY) * scale;
+    const maxRange = Math.max(rangeX, rangeY);
+
+    // how many grid cells do we want along the longest dimension?
+    const targetCells = 20;
+    const dynamicSize = maxRange / targetCells;
+
+    // clamp so that the grid never becomes absurdly tiny or huge
+    const minSize = baseGridSize * scale * 0.05;
+    const maxSize = baseGridSize * scale * 5;
+    gridSize = Math.min(maxSize, Math.max(minSize, dynamicSize));
+  }
 
   // debug: log whenever dimensions state changes
   useEffect(() => {

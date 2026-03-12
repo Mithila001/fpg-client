@@ -8,25 +8,38 @@ const Home: React.FC = () => {
   const [labels, setLabels] = useState<Label[] | null>(null);
   const [loading, setLoading] = useState(false);
   const [error, setError] = useState<string | null>(null);
+  const [autoRefresh, setAutoRefresh] = useState(false);
+
+  // helper to fetch and update data
+  const load = async () => {
+    setLoading(true);
+    setError(null);
+    try {
+      const data = await fetchFormattedPlan();
+      setSegments(formatResponseToSegments(data));
+      setLabels(roomsToLabels(data.rooms));
+    } catch (err) {
+      setError("Failed to load formatted plan. Is the backend running?");
+      console.error(err);
+    } finally {
+      setLoading(false);
+    }
+  };
 
   // fetch formatted walls on component mount
   useEffect(() => {
-    const load = async () => {
-      setLoading(true);
-      setError(null);
-      try {
-        const data = await fetchFormattedPlan();
-        setSegments(formatResponseToSegments(data));
-        setLabels(roomsToLabels(data.rooms));
-      } catch (err) {
-        setError("Failed to load formatted plan. Is the backend running?");
-        console.error(err);
-      } finally {
-        setLoading(false);
-      }
-    };
     load();
   }, []);
+
+  // toggle auto-refresh loop
+  useEffect(() => {
+    if (!autoRefresh) return;
+
+    const interval = setInterval(() => {
+      load();
+    }, 2000);
+    return () => clearInterval(interval);
+  }, [autoRefresh]);
 
   return (
     // ensure this page fills the available space and never scrolls
@@ -51,7 +64,24 @@ const Home: React.FC = () => {
         </div>
 
         {/* Right*/}
-        <div className="bg-green-200 w-64 flex-none p-8">Right Property Panel</div>
+        <div className="bg-green-200 w-64 flex-none p-8 flex flex-col gap-4">
+          <div className="flex items-center gap-2">
+            <label htmlFor="auto-refresh" className="text-sm">
+              Auto‑refresh
+            </label>
+            <input
+              id="auto-refresh"
+              type="checkbox"
+              checked={autoRefresh}
+              onChange={(e) => setAutoRefresh(e.target.checked)}
+              className="h-4 w-4"
+            />
+          </div>
+          <div className="text-xs text-gray-600">
+            {autoRefresh && <span>Updating every 2 seconds…</span>}
+          </div>
+          <div className="flex-1">Right Property Panel</div>
+        </div>
       </div>
     </div>
   );
