@@ -175,14 +175,16 @@ const CoordinateCanvas: React.FC<CoordinateCanvasProps> = ({
                   stroke="#4f46e5"
                   strokeWidth={2}
                 />
-                <Text
-                  x={point.x + 8}
-                  y={point.y - 12}
-                  text={point.label || `(${point.x}, ${point.y})`}
-                  fontSize={11}
-                  fontStyle="bold"
-                  fill="#475569"
-                />
+                {point.label && (
+                  <Text
+                    x={point.x + 8}
+                    y={point.y - 12}
+                    text={point.label}
+                    fontSize={11}
+                    fontStyle="bold"
+                    fill="#475569"
+                  />
+                )}
               </React.Fragment>
             ))}
           </Layer>

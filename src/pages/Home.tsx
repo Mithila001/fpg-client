@@ -37,7 +37,7 @@ const Home: React.FC = () => {
 
     const interval = setInterval(() => {
       load();
-    }, 2000);
+    }, 6000);
     return () => clearInterval(interval);
   }, [autoRefresh]);
 
