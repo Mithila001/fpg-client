@@ -1,9 +1,12 @@
-import React, { useState, useEffect } from "react";
+import React, { useState, useEffect, useRef } from "react";
 import CoordinateCanvas from "../components/Konva/KonvaCanvas";
-import { fetchFormattedPlan, formatResponseToSegments, roomsToLabels } from "../api/floorPlan";
+import type { CoordinateCanvasHandle } from "../components/Konva/KonvaCanvas";
+import { formatResponseToSegments, roomsToLabels } from "../api/floorPlan";
 import type { Coordinate, Label } from "../components/Konva/shapes/types";
+import { fetchFormattedPlanBypass } from "../dev/apiBypass";
 
 const Home: React.FC = () => {
+  const canvasRef = useRef<CoordinateCanvasHandle>(null);
   const [segments, setSegments] = useState<Coordinate[][] | null>(null);
   const [labels, setLabels] = useState<Label[] | null>(null);
   const [loading, setLoading] = useState(false);
@@ -15,11 +18,12 @@ const Home: React.FC = () => {
     setLoading(true);
     setError(null);
     try {
-      const data = await fetchFormattedPlan();
+      const data = await fetchFormattedPlanBypass();
       setSegments(formatResponseToSegments(data));
       setLabels(roomsToLabels(data.rooms));
     } catch (err) {
-      setError("Failed to load formatted plan. Is the backend running?");
+      const message = err instanceof Error ? err.message : "Failed to load formatted plan.";
+      setError(message);
       console.error(err);
     } finally {
       setLoading(false);
@@ -54,10 +58,11 @@ const Home: React.FC = () => {
           <div className="flex-1 min-h-0">
             {segments !== null && (
               <CoordinateCanvas
+                ref={canvasRef}
                 segments={segments}
                 labels={labels ?? undefined}
-                resolution={20}
-                wallThickness={8}
+                resolution={5}
+                wallThickness={6}
               />
             )}
           </div>
@@ -80,6 +85,12 @@ const Home: React.FC = () => {
           <div className="text-xs text-gray-600">
             {autoRefresh && <span>Updating every 2 seconds…</span>}
           </div>
+          <button
+            onClick={() => canvasRef.current?.reset()}
+            className="px-3 py-2 bg-blue-500 text-white text-sm rounded hover:bg-blue-600"
+          >
+            Reset View
+          </button>
           <div className="flex-1">Right Property Panel</div>
         </div>
       </div>

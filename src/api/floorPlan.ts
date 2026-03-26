@@ -1,50 +1,61 @@
 import client from "./client";
 import type { Coordinate, Label } from "../components/Konva/shapes/types";
 
-// rooms returned alongside the formatted lines (new in backend API)
+export interface Point {
+  x: number;
+  y: number;
+}
+
+export interface Wall {
+  x1: number;
+  y1: number;
+  x2: number;
+  y2: number;
+}
+
+// rooms returned alongside wall geometry
 export interface Room {
   name: string;
-  center: [number, number];
+  type: string;
+  center: Point;
 }
 
-// response shape returned by the formatting algorithm
+export type PlanStatus = "FEASIBLE" | "INFEASIBLE" | "ERROR" | string;
+
+// response shape returned by the backend solver
 export interface FormatResponse {
-  merged_horiz: Record<string, [number, number][][]>;
-  merged_vert: Record<string, [number, number][][]>;
-  rooms?: Room[]; // optional, may not have been included previously
+  status: PlanStatus;
+  message: string;
+  walls: Wall[];
+  rooms?: Room[];
 }
 
-// call the backend formatter endpoint and return the raw data
+// call the backend formatter endpoint and only accept feasible plans
 export async function fetchFormattedPlan(): Promise<FormatResponse> {
   const response = await client.get<FormatResponse>("/algorithms/format");
-  return response.data;
+  const data = response.data;
+
+  if (data.status !== "FEASIBLE") {
+    throw new Error(data.message || `Plan status is ${data.status}`);
+  }
+
+  return data;
 }
 
-// convert a FormatResponse into an array of polyline segments
+// convert response walls into 2-point polyline segments for Konva
 export function formatResponseToSegments(resp: FormatResponse): Coordinate[][] {
-  const segments: Coordinate[][] = [];
-
-  const convert = (map: Record<string, [number, number][][]>) => {
-    Object.values(map).forEach((polylines) => {
-      polylines.forEach((poly) => {
-        const coords: Coordinate[] = poly.map((pt) => ({ x: pt[0], y: pt[1] }));
-        if (coords.length > 0) segments.push(coords);
-      });
-    });
-  };
-
-  convert(resp.merged_horiz);
-  convert(resp.merged_vert);
-
-  return segments;
+  return (resp.walls ?? []).map((wall) => [
+    { x: wall.x1, y: wall.y1 },
+    { x: wall.x2, y: wall.y2 },
+  ]);
 }
 
 // extract text labels from rooms returned by the service
 export function roomsToLabels(rooms?: Room[]): Label[] {
   if (!rooms) return [];
   return rooms.map((room) => ({
-    x: room.center[0],
-    y: room.center[1],
+    x: room.center.x,
+    y: room.center.y,
     text: room.name,
   }));
 }

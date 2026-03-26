@@ -1,5 +1,6 @@
-import React, { useState, useEffect, useRef } from "react";
+import React, { useState, useEffect, useRef, forwardRef, useImperativeHandle } from "react";
 import { Stage, Layer, Circle, Text, Rect } from "react-konva";
+import Konva from "konva";
 import { Grid, Wall, Labels } from "./shapes";
 import type { Coordinate, Label } from "./shapes";
 
@@ -16,52 +17,57 @@ interface CoordinateCanvasProps {
   wallThickness?: number;
 }
 
-const CoordinateCanvas: React.FC<CoordinateCanvasProps> = ({
-  segments,
-  points,
-  labels,
-  resolution,
-  wallThickness,
-}) => {
-  const scale = resolution ?? 1;
+export interface CoordinateCanvasHandle {
+  reset: () => void;
+}
 
-  // determine which geometry to render (flatten segments for debugging)
-  let effectivePoints: Coordinate[] = [];
-  if (segments && segments.length > 0) {
-    effectivePoints = segments.flat();
-  } else if (points && points.length > 0) {
-    effectivePoints = points;
-  }
+const CoordinateCanvas = forwardRef<CoordinateCanvasHandle, CoordinateCanvasProps>(
+  ({ segments, points, labels, resolution, wallThickness }, ref) => {
+    const scale = resolution ?? 1;
 
-  // compute offset so the minimum coordinate isn't at the very edge
-  const margin = 100;
-  let offsetX = 0;
-  let offsetY = 0;
-  if (effectivePoints.length > 0) {
-    const minX = Math.min(...effectivePoints.map((p) => p.x));
-    const minY = Math.min(...effectivePoints.map((p) => p.y));
-    offsetX = margin - minX * scale;
-    offsetY = margin - minY * scale;
-  }
+    // determine which geometry to render (flatten segments for debugging)
+    let effectivePoints: Coordinate[] = [];
+    if (segments && segments.length > 0) {
+      effectivePoints = segments.flat();
+    } else if (points && points.length > 0) {
+      effectivePoints = points;
+    }
 
-  const scaledPoints = effectivePoints.map((p) => ({
-    x: p.x * scale + offsetX,
-    y: p.y * scale + offsetY,
-    label: p.label,
-  }));
+    // compute offset so the minimum coordinate isn't at the very edge
+    const margin = 100;
+    let offsetX = 0;
+    let offsetY = 0;
+    if (effectivePoints.length > 0) {
+      const minX = Math.min(...effectivePoints.map((p) => p.x));
+      const minY = Math.min(...effectivePoints.map((p) => p.y));
+      offsetX = margin - minX * scale;
+      offsetY = margin - minY * scale;
+    }
 
-  const scaledLabels: Label[] | undefined = labels
-    ? labels.map((l) => ({
-        x: l.x * scale + offsetX,
-        y: l.y * scale + offsetY,
-        text: l.text,
-        fontSize: l.fontSize,
-        color: l.color,
-      }))
-    : undefined;
+    const scaledPoints = effectivePoints.map((p) => ({
+      x: p.x * scale + offsetX,
+      y: p.y * scale + offsetY,
+      label: p.label,
+    }));
 
-  const containerRef = useRef<HTMLDivElement>(null);
-  const [dimensions, setDimensions] = useState({ width: 0, height: 0 });
+    const scaledLabels: Label[] | undefined = labels
+      ? labels.map((l) => ({
+          x: l.x * scale + offsetX,
+          y: l.y * scale + offsetY,
+          text: l.text,
+          fontSize: l.fontSize,
+          color: l.color,
+        }))
+      : undefined;
+
+    const containerRef = useRef<HTMLDivElement>(null);
+    const stageRef = useRef<Konva.Stage>(null);
+    const [dimensions, setDimensions] = useState({ width: 0, height: 0 });
+
+    // pan & zoom state
+    const [stageScale, setStageScale] = useState(1);
+    const [stageX, setStageX] = useState(0);
+    const [stageY, setStageY] = useState(0);
 
   // grid configuration
   const baseGridSize = 50;
@@ -92,6 +98,43 @@ const CoordinateCanvas: React.FC<CoordinateCanvasProps> = ({
     const maxSize = baseGridSize * scale * 5;
     gridSize = Math.min(maxSize, Math.max(minSize, dynamicSize));
   }
+
+  // pan & zoom handlers
+  const handleWheel = (e: Konva.KonvaEventObject<WheelEvent>) => {
+    e.evt.preventDefault();
+    const stage = stageRef.current;
+    if (!stage) return;
+
+    const oldScale = stageScale;
+    const pointerPos = stage.getPointerPosition();
+    if (!pointerPos) return;
+
+    const zoomSpeed = 0.1;
+    const direction = e.evt.deltaY > 0 ? -1 : 1;
+    const newScale = Math.min(3, Math.max(0.5, oldScale + direction * zoomSpeed));
+
+    // zoom centered on cursor
+    const newX = pointerPos.x - (pointerPos.x - stageX) * (newScale / oldScale);
+    const newY = pointerPos.y - (pointerPos.y - stageY) * (newScale / oldScale);
+
+    setStageScale(newScale);
+    setStageX(newX);
+    setStageY(newY);
+  };
+
+  const handleDragEnd = (e: Konva.KonvaEventObject<DragEvent>) => {
+    setStageX(e.target.x());
+    setStageY(e.target.y());
+  };
+
+  // expose reset method via ref
+  useImperativeHandle(ref, () => ({
+    reset: () => {
+      setStageScale(1);
+      setStageX(0);
+      setStageY(0);
+    },
+  }));
 
   // debug: log whenever dimensions state changes
   useEffect(() => {
@@ -130,7 +173,18 @@ const CoordinateCanvas: React.FC<CoordinateCanvasProps> = ({
     // use full size so parent resizing triggers ResizeObserver
     <div ref={containerRef} style={{ width: "100%", height: "100%" }} className="bg-red-200">
       {dimensions.width > 0 && (
-        <Stage width={Math.floor(dimensions.width)} height={Math.floor(dimensions.height)}>
+        <Stage
+          ref={stageRef}
+          width={Math.floor(dimensions.width)}
+          height={Math.floor(dimensions.height)}
+          draggable
+          scaleX={stageScale}
+          scaleY={stageScale}
+          x={stageX}
+          y={stageY}
+          onWheel={handleWheel}
+          onDragEnd={handleDragEnd}
+        >
           <Layer>
             {/* draw border around the entire canvas */}
             <Rect
@@ -190,6 +244,7 @@ const CoordinateCanvas: React.FC<CoordinateCanvasProps> = ({
       )}
     </div>
   );
-};
+}
+);
 
 export default CoordinateCanvas;
