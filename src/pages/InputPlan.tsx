@@ -1,6 +1,11 @@
 import React, { useMemo, useState } from "react";
 import InputPlanCanvas, { type RoomPoints, type CornerKey } from "../components/Konva/InputPlanCanvas";
 import { calculatePolygonArea, calculatePolygonCentroid, scalePolygon } from "../components/Konva/utils/geometry";
+import {
+  formatAreaFromCm2,
+  formatLengthFromCm,
+  parseAreaM2InputToCm2,
+} from "../utils/units";
 
 const KEYS: CornerKey[] = ["A", "B", "C", "D", "E", "F"];
 const MIN_BORDERS = 4;
@@ -39,7 +44,7 @@ const InputPlan: React.FC = () => {
       .map((key, idx) => {
         const next = active[(idx + 1) % active.length];
         const len = distance(points[key], points[next]);
-        return `${key}->${next}: ${len.toFixed(1)}`;
+        return `${key}->${next}: ${formatLengthFromCm(len, 2)}`;
       })
       .join(" | ");
   }, [borderCount, points]);
@@ -72,9 +77,9 @@ const InputPlan: React.FC = () => {
 
   const handleApplyArea = () => {
     if (!confirmedBasePoints) return;
-    const targetArea = parseFloat(targetAreaInput);
-    if (isNaN(targetArea) || targetArea <= 0) {
-      setScaleError("Please enter a valid positive number for area.");
+    const targetAreaCm2 = parseAreaM2InputToCm2(targetAreaInput);
+    if (targetAreaCm2 === null || targetAreaCm2 <= 0) {
+      setScaleError("Please enter a valid positive number for area (m²).");
       return;
     }
 
@@ -85,7 +90,7 @@ const InputPlan: React.FC = () => {
       return;
     }
 
-    const scale = Math.sqrt(targetArea / baseArea);
+    const scale = Math.sqrt(targetAreaCm2 / baseArea);
     const centroid = calculatePolygonCentroid(confirmedBasePoints, orderedKeys);
     const scaledPoints = scalePolygon(confirmedBasePoints, orderedKeys, centroid, scale);
 
@@ -93,7 +98,7 @@ const InputPlan: React.FC = () => {
     // For now we assume if it's convex base, scaling is convex.
     
     setPoints(scaledPoints);
-    setLastAppliedArea(targetArea);
+    setLastAppliedArea(targetAreaCm2);
     setScaleError(null);
   };
 
@@ -144,11 +149,11 @@ const InputPlan: React.FC = () => {
             ) : (
               <div className="flex flex-col gap-3">
                 <div className="text-xs text-gray-600">
-                  Current Area: <span className="font-semibold">{currentArea.toFixed(1)} unit²</span>
+                  Current Area: <span className="font-semibold">{formatAreaFromCm2(currentArea, 2)}</span>
                 </div>
                 
                 <div className="flex flex-col gap-1">
-                  <label htmlFor="areaInput" className="text-xs text-gray-700">Target Area (unit²)</label>
+                  <label htmlFor="areaInput" className="text-xs text-gray-700">Target Area (m²)</label>
                   <input
                     id="areaInput"
                     type="number"
@@ -157,7 +162,7 @@ const InputPlan: React.FC = () => {
                     value={targetAreaInput}
                     onChange={(e) => setTargetAreaInput(e.target.value)}
                     className="rounded border border-gray-300 px-3 py-2 text-sm"
-                    placeholder="e.g. 5000"
+                    placeholder="e.g. 50"
                   />
                 </div>
 
@@ -172,7 +177,7 @@ const InputPlan: React.FC = () => {
 
                 {lastAppliedArea !== null && (
                   <div className="text-xs text-emerald-700 mt-2">
-                    ✓ Scaled to match {lastAppliedArea} unit²
+                    ✓ Scaled to match {formatAreaFromCm2(lastAppliedArea, 2)}
                   </div>
                 )}
               </div>

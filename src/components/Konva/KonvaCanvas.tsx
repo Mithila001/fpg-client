@@ -3,6 +3,7 @@ import { Stage, Layer, Circle, Text, Rect } from "react-konva";
 import Konva from "konva";
 import { Grid, Wall, Labels } from "./shapes";
 import type { Coordinate, Label } from "./shapes";
+import { cmToPx } from "../../utils/units";
 
 interface CoordinateCanvasProps {
   // optional collection of wall segments (each segment is a polyline)
@@ -11,8 +12,8 @@ interface CoordinateCanvasProps {
   points?: Coordinate[];
   // array of textual labels to place on the stage
   labels?: Label[];
-  // resolution multiplier; scales coordinates and grid spacing
-  resolution?: number;
+  // pixels-per-centimeter scale for converting internal cm coordinates to canvas px
+  pxPerCm?: number;
   // wall thickness in pixels
   wallThickness?: number;
 }
@@ -22,8 +23,8 @@ export interface CoordinateCanvasHandle {
 }
 
 const CoordinateCanvas = forwardRef<CoordinateCanvasHandle, CoordinateCanvasProps>(
-  ({ segments, points, labels, resolution, wallThickness }, ref) => {
-    const scale = resolution ?? 1;
+  ({ segments, points, labels, pxPerCm, wallThickness }, ref) => {
+    const scale = pxPerCm ?? 1;
 
     // determine which geometry to render (flatten segments for debugging)
     let effectivePoints: Coordinate[] = [];
@@ -40,20 +41,20 @@ const CoordinateCanvas = forwardRef<CoordinateCanvasHandle, CoordinateCanvasProp
     if (effectivePoints.length > 0) {
       const minX = Math.min(...effectivePoints.map((p) => p.x));
       const minY = Math.min(...effectivePoints.map((p) => p.y));
-      offsetX = margin - minX * scale;
-      offsetY = margin - minY * scale;
+      offsetX = margin - cmToPx(minX, scale);
+      offsetY = margin - cmToPx(minY, scale);
     }
 
     const scaledPoints = effectivePoints.map((p) => ({
-      x: p.x * scale + offsetX,
-      y: p.y * scale + offsetY,
+      x: cmToPx(p.x, scale) + offsetX,
+      y: cmToPx(p.y, scale) + offsetY,
       label: p.label,
     }));
 
     const scaledLabels: Label[] | undefined = labels
       ? labels.map((l) => ({
-          x: l.x * scale + offsetX,
-          y: l.y * scale + offsetY,
+          x: cmToPx(l.x, scale) + offsetX,
+          y: cmToPx(l.y, scale) + offsetY,
           text: l.text,
           fontSize: l.fontSize,
           color: l.color,
@@ -70,7 +71,7 @@ const CoordinateCanvas = forwardRef<CoordinateCanvasHandle, CoordinateCanvasProp
     const [stageY, setStageY] = useState(0);
 
   // grid configuration
-  const baseGridSize = 50;
+  const baseGridSize = cmToPx(10, scale);
 
   // start with a simple scale-based grid size, but if we have geometry
   // compute a "dynamic" grid spacing so the number of cells between the
@@ -85,8 +86,8 @@ const CoordinateCanvas = forwardRef<CoordinateCanvasHandle, CoordinateCanvasProp
     const minX = Math.min(...effectivePoints.map((p) => p.x));
     const minY = Math.min(...effectivePoints.map((p) => p.y));
 
-    const rangeX = (maxX - minX) * scale;
-    const rangeY = (maxY - minY) * scale;
+    const rangeX = cmToPx(maxX - minX, scale);
+    const rangeY = cmToPx(maxY - minY, scale);
     const maxRange = Math.max(rangeX, rangeY);
 
     // how many grid cells do we want along the longest dimension?
@@ -197,7 +198,7 @@ const CoordinateCanvas = forwardRef<CoordinateCanvasHandle, CoordinateCanvasProp
             />
 
             {/* grid and labels */}
-            <Grid dimensions={dimensions} gridSize={gridSize} />
+            <Grid dimensions={dimensions} gridSize={gridSize} pxPerCm={scale} />
 
             {/* walls rendered using the new Wall shape */}
             {segments && segments.length > 0 ? (
@@ -205,8 +206,8 @@ const CoordinateCanvas = forwardRef<CoordinateCanvasHandle, CoordinateCanvasProp
                 <Wall
                   key={`seg-${idx}`}
                   points={seg.map((p) => ({
-                    x: p.x * scale + offsetX,
-                    y: p.y * scale + offsetY,
+                    x: cmToPx(p.x, scale) + offsetX,
+                    y: cmToPx(p.y, scale) + offsetY,
                   }))}
                   thickness={wallThickness ?? 6}
                 />

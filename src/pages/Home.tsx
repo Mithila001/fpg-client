@@ -61,7 +61,7 @@ const Home: React.FC = () => {
                 ref={canvasRef}
                 segments={segments}
                 labels={labels ?? undefined}
-                resolution={5}
+                pxPerCm={0.25}
                 wallThickness={6}
               />
             )}

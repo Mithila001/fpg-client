@@ -1,7 +1,7 @@
-import type { FormatResponse } from "../api/floorPlan";
+import { normalizeApiResponseToCm, type FormatResponse } from "../api/floorPlan";
 
 export async function fetchFormattedPlanBypass(): Promise<FormatResponse> {
-  return {
+  const raw: FormatResponse = {
     status: "FEASIBLE",
     message: "Solver found a layout",
     walls: [
@@ -35,4 +35,6 @@ export async function fetchFormattedPlanBypass(): Promise<FormatResponse> {
       { name: "Living Room", type: "livingRoom", center: { x: 43.0, y: 93.0 } },
     ],
   };
+
+  return normalizeApiResponseToCm(raw);
 }

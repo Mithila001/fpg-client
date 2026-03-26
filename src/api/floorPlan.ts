@@ -1,5 +1,6 @@
 import client from "./client";
 import type { Coordinate, Label } from "../components/Konva/shapes/types";
+import { apiRawToCm } from "../utils/units";
 
 export interface Point {
   x: number;
@@ -30,6 +31,26 @@ export interface FormatResponse {
   rooms?: Room[];
 }
 
+// Normalize backend payload values to internal centimeters.
+export function normalizeApiResponseToCm(resp: FormatResponse): FormatResponse {
+  return {
+    ...resp,
+    walls: (resp.walls ?? []).map((wall) => ({
+      x1: apiRawToCm(wall.x1),
+      y1: apiRawToCm(wall.y1),
+      x2: apiRawToCm(wall.x2),
+      y2: apiRawToCm(wall.y2),
+    })),
+    rooms: resp.rooms?.map((room) => ({
+      ...room,
+      center: {
+        x: apiRawToCm(room.center.x),
+        y: apiRawToCm(room.center.y),
+      },
+    })),
+  };
+}
+
 // call the backend formatter endpoint and only accept feasible plans
 export async function fetchFormattedPlan(): Promise<FormatResponse> {
   const response = await client.get<FormatResponse>("/algorithms/format");
@@ -39,7 +60,7 @@ export async function fetchFormattedPlan(): Promise<FormatResponse> {
     throw new Error(data.message || `Plan status is ${data.status}`);
   }
 
-  return data;
+  return normalizeApiResponseToCm(data);
 }
 
 // convert response walls into 2-point polyline segments for Konva

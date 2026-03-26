@@ -1,6 +1,7 @@
 import React, { useEffect, useMemo, useRef, useState } from "react";
 import { Circle, Layer, Line, Stage, Text } from "react-konva";
 import Konva from "konva";
+import { formatLengthFromCm } from "../../utils/units";
 
 export type CornerKey = "A" | "B" | "C" | "D" | "E" | "F";
 
@@ -266,7 +267,7 @@ const InputPlanCanvas: React.FC<InputPlanCanvasProps> = ({
             x={16}
             y={12}
             text={orderedKeys
-              .map((key) => `${key}: ${(wallLengths[key] ?? 0).toFixed(1)}`)
+              .map((key) => `${key}: ${formatLengthFromCm(wallLengths[key] ?? 0, 2)}`)
               .join(" | ")}
             fontSize={13}
             fill="#334155"
