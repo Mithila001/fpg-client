@@ -2,7 +2,7 @@ import React, { useEffect, useMemo, useRef, useState } from "react";
 import { Circle, Layer, Line, Stage, Text } from "react-konva";
 import Konva from "konva";
 
-type CornerKey = "A" | "B" | "C" | "D" | "E" | "F";
+export type CornerKey = "A" | "B" | "C" | "D" | "E" | "F";
 
 export interface RoomPoint {
   x: number;
@@ -107,6 +107,7 @@ const InputPlanCanvas: React.FC<InputPlanCanvasProps> = ({
   const stageRef = useRef<Konva.Stage>(null);
   const [active, setActive] = useState<CornerKey | null>(null);
   const [dimensions, setDimensions] = useState({ width: DEFAULT_WIDTH, height: DEFAULT_HEIGHT });
+  const [stageScale, setStageScale] = useState(1);
   const orderedKeys = useMemo(() => ALL_KEYS.slice(0, borderCount), [borderCount]);
 
   useEffect(() => {
@@ -209,9 +210,18 @@ const InputPlanCanvas: React.FC<InputPlanCanvasProps> = ({
     onRemoveBorderLine();
   };
 
+  const handleZoomIn = () => setStageScale(prev => Math.min(3, prev + 0.2));
+  const handleZoomOut = () => setStageScale(prev => Math.max(0.4, prev - 0.2));
+
   return (
     <div ref={containerRef} className="relative h-full w-full rounded-lg border border-gray-200 bg-white overflow-hidden">
-      <Stage ref={stageRef} width={dimensions.width} height={dimensions.height}>
+      <Stage 
+        ref={stageRef} 
+        width={dimensions.width} 
+        height={dimensions.height}
+        scaleX={stageScale}
+        scaleY={stageScale}
+      >
         <Layer>
           <Line points={polygon} closed stroke="#0f172a" strokeWidth={6} fill="#dbeafe" />
 
@@ -227,10 +237,13 @@ const InputPlanCanvas: React.FC<InputPlanCanvasProps> = ({
                   stroke="#ffffff"
                   strokeWidth={2}
                   draggable={editable}
-                  dragBoundFunc={(pos) => ({
-                    x: clamp(pos.x, PADDING, dimensions.width - PADDING),
-                    y: clamp(pos.y, PADDING, dimensions.height - PADDING),
-                  })}
+                  dragBoundFunc={(pos) => {
+                    const scale = stageScale;
+                    return {
+                      x: clamp(pos.x, PADDING * scale, (dimensions.width - PADDING) * scale),
+                      y: clamp(pos.y, PADDING * scale, (dimensions.height - PADDING) * scale),
+                    };
+                  }}
                   onDragStart={() => editable && setActive(key)}
                   onDragMove={(e) => handleDragMove(key, e)}
                   onDragEnd={(e) => {
@@ -286,6 +299,31 @@ const InputPlanCanvas: React.FC<InputPlanCanvasProps> = ({
         >
           Remove border line
         </button>
+      </div>
+      <div className="absolute top-3 right-3 flex flex-col gap-2">
+        <button
+          onClick={handleZoomIn}
+          className="w-8 h-8 flex items-center justify-center rounded bg-gray-100 border border-gray-300 text-gray-700 hover:bg-gray-200"
+          title="Zoom In"
+        >
+          +
+        </button>
+        <button
+          onClick={handleZoomOut}
+          className="w-8 h-8 flex items-center justify-center rounded bg-gray-100 border border-gray-300 text-gray-700 hover:bg-gray-200"
+          title="Zoom Out"
+        >
+          -
+        </button>
+        {stageScale !== 1 && (
+          <button
+            onClick={() => setStageScale(1)}
+            className="w-8 h-8 flex items-center justify-center rounded bg-gray-100 border border-gray-300 text-xs text-gray-700 hover:bg-gray-200"
+            title="Reset Zoom"
+          >
+            1x
+          </button>
+        )}
       </div>
     </div>
   );
