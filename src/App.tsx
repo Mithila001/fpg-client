@@ -3,6 +3,7 @@ import Layout from "./components/Layout";
 import Home from "./pages/Home";
 import About from "./pages/About";
 import Contact from "./pages/Contact";
+import InputPlan from "./pages/InputPlan";
 
 function App() {
   return (
@@ -10,6 +11,7 @@ function App() {
       <Routes>
         <Route path="/" element={<Layout />}>
           <Route index element={<Home />} />
+          <Route path="input-plan" element={<InputPlan />} />
           <Route path="about" element={<About />} />
           <Route path="contact" element={<Contact />} />
         </Route>
