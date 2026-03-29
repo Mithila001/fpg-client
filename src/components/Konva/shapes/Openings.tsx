@@ -59,14 +59,20 @@ const Openings: React.FC<OpeningsProps> = ({ openings, pxPerCm, offsetX, offsetY
         const ny = dx / len;
 
         if (opening.kind === "window") {
-          const inner = 2;
+          const gap = 3;
           return (
             <React.Fragment key={`opening-${idx}`}>
-              <Line points={[x1, y1, x2, y2]} stroke="#0f766e" strokeWidth={2} lineCap="round" />
+              <Line points={[x1, y1, x2, y2]} stroke="#0f766e" strokeWidth={3} lineCap="round" />
               <Line
-                points={[x1 + nx * inner, y1 + ny * inner, x2 + nx * inner, y2 + ny * inner]}
-                stroke="#14b8a6"
-                strokeWidth={1.5}
+                points={[x1 + nx * gap, y1 + ny * gap, x2 + nx * gap, y2 + ny * gap]}
+                stroke="#2dd4bf"
+                strokeWidth={5}
+                lineCap="round"
+              />
+              <Line
+                points={[x1 - nx * gap, y1 - ny * gap, x2 - nx * gap, y2 - ny * gap]}
+                stroke="#22d3ee"
+                strokeWidth={5}
                 lineCap="round"
               />
             </React.Fragment>
@@ -76,9 +82,15 @@ const Openings: React.FC<OpeningsProps> = ({ openings, pxPerCm, offsetX, offsetY
         const sweepDirection: 1 | -1 = opening.side === "west" || opening.side === "south" ? -1 : 1;
         const arcPoints = getArcPoints(x1, y1, x2, y2, sweepDirection);
 
+        const leafAngle = (Math.PI / 2) * sweepDirection;
+        const leafEndpoint = rotate(dx, dy, leafAngle);
+        const leafX = x1 + leafEndpoint.x;
+        const leafY = y1 + leafEndpoint.y;
+
         return (
           <React.Fragment key={`opening-${idx}`}>
             <Line points={[x1, y1, x2, y2]} stroke="#92400e" strokeWidth={2} lineCap="round" />
+            <Line points={[x1, y1, leafX, leafY]} stroke="#b45309" strokeWidth={1.5} lineCap="round" />
             <Line points={arcPoints} stroke="#b45309" strokeWidth={1.5} lineCap="round" lineJoin="round" />
           </React.Fragment>
         );
