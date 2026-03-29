@@ -1,4 +1,4 @@
-import React, { useState, useEffect, useRef } from "react";
+import React, { useState, useEffect, useRef, useCallback } from "react";
 import CoordinateCanvas from "../components/Konva/KonvaCanvas";
 import type { CoordinateCanvasHandle } from "../components/Konva/KonvaCanvas";
 import {
@@ -19,10 +19,17 @@ const Home: React.FC = () => {
   const [openings, setOpenings] = useState<CanvasOpening[] | null>(null);
   const [loading, setLoading] = useState(false);
   const [error, setError] = useState<string | null>(null);
-  const [autoRefresh, setAutoRefresh] = useState(false);
+  const lastRequestAtRef = useRef(0);
+  const inFlightRef = useRef(false);
 
   // helper to fetch and update data
-  const load = async () => {
+  const load = useCallback(async () => {
+    const now = Date.now();
+    if (inFlightRef.current) return;
+    if (now - lastRequestAtRef.current < 2000) return;
+
+    lastRequestAtRef.current = now;
+    inFlightRef.current = true;
     setLoading(true);
     setError(null);
     try {
@@ -36,24 +43,15 @@ const Home: React.FC = () => {
       setError(message);
       console.error(err);
     } finally {
+      inFlightRef.current = false;
       setLoading(false);
     }
-  };
+  }, []);
 
   // fetch formatted walls on component mount
   useEffect(() => {
-    load();
-  }, []);
-
-  // toggle auto-refresh loop
-  useEffect(() => {
-    if (!autoRefresh) return;
-
-    const interval = setInterval(() => {
-      load();
-    }, 2000);
-    return () => clearInterval(interval);
-  }, [autoRefresh]);
+    void load();
+  }, [load]);
 
   return (
     // ensure this page fills the available space and never scrolls
@@ -81,22 +79,15 @@ const Home: React.FC = () => {
 
         {/* Right*/}
         <div className="bg-green-200 w-64 flex-none p-8 flex flex-col gap-4">
-          <div className="flex items-center gap-2">
-            <label htmlFor="auto-refresh" className="text-sm">
-              Auto‑refresh
-            </label>
-            <input
-              id="auto-refresh"
-              type="checkbox"
-              checked={autoRefresh}
-              onChange={(e) => setAutoRefresh(e.target.checked)}
-              className="h-4 w-4"
-            />
-          </div>
-          <div className="text-xs text-gray-600">
-            {autoRefresh && <span>Updating every 2 seconds…</span>}
-          </div>
           <div className="text-xs text-gray-700">Rooms detected: {roomCenters?.length ?? 0}</div>
+          <button
+            onClick={() => void load()}
+            disabled={loading}
+            className="px-3 py-2 bg-emerald-600 text-white text-sm rounded hover:bg-emerald-700 disabled:opacity-50 disabled:cursor-not-allowed"
+          >
+            Get New Floor Plan
+          </button>
+          <div className="text-xs text-gray-700">API calls are limited to once every 2 seconds.</div>
           <button
             onClick={() => canvasRef.current?.reset()}
             className="px-3 py-2 bg-blue-500 text-white text-sm rounded hover:bg-blue-600"
