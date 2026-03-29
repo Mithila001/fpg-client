@@ -27,13 +27,6 @@ export async function fetchFormattedPlanBypass(): Promise<FormatResponse> {
       { x1: 100.0, y1: 41.0, x2: 100.0, y2: 77.0 },
       { x1: 100.0, y1: 77.0, x2: 100.0, y2: 103.0 },
     ],
-    rooms: [
-      { name: "bedroom1", type: "bedroom", center: { x: 80.5, y: 90.0 } },
-      { name: "bedroom2", type: "bedroom", center: { x: 80.5, y: 59.0 } },
-      { name: "bathroom1", type: "bathroom", center: { x: 46.0, y: 55.5 } },
-      { name: "kitchen1", type: "kitchen", center: { x: 12.5, y: 81.0 } },
-      { name: "Living Room", type: "livingRoom", center: { x: 43.0, y: 93.0 } },
-    ],
   };
 
   return normalizeApiResponseToCm(raw);

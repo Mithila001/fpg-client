@@ -1,14 +1,22 @@
 import React, { useState, useEffect, useRef } from "react";
 import CoordinateCanvas from "../components/Konva/KonvaCanvas";
 import type { CoordinateCanvasHandle } from "../components/Konva/KonvaCanvas";
-import { formatResponseToSegments, roomsToLabels } from "../api/floorPlan";
+import {
+  compactRoomsToLabels,
+  compactRoomsToOpenings,
+  fetchFormattedPlan,
+  formatResponseToSegments,
+  roomCentersFromCompactByRoom,
+} from "../api/floorPlan";
 import type { Coordinate, Label } from "../components/Konva/shapes/types";
-import { fetchFormattedPlanBypass } from "../dev/apiBypass";
+import type { CanvasOpening } from "../types";
 
 const Home: React.FC = () => {
   const canvasRef = useRef<CoordinateCanvasHandle>(null);
   const [segments, setSegments] = useState<Coordinate[][] | null>(null);
   const [labels, setLabels] = useState<Label[] | null>(null);
+  const [roomCenters, setRoomCenters] = useState<Coordinate[] | null>(null);
+  const [openings, setOpenings] = useState<CanvasOpening[] | null>(null);
   const [loading, setLoading] = useState(false);
   const [error, setError] = useState<string | null>(null);
   const [autoRefresh, setAutoRefresh] = useState(false);
@@ -18,9 +26,11 @@ const Home: React.FC = () => {
     setLoading(true);
     setError(null);
     try {
-      const data = await fetchFormattedPlanBypass();
+      const data = await fetchFormattedPlan();
       setSegments(formatResponseToSegments(data));
-      setLabels(roomsToLabels(data.rooms));
+      setRoomCenters(roomCentersFromCompactByRoom(data));
+      setLabels(compactRoomsToLabels(data));
+      setOpenings(compactRoomsToOpenings(data));
     } catch (err) {
       const message = err instanceof Error ? err.message : "Failed to load formatted plan.";
       setError(message);
@@ -61,7 +71,8 @@ const Home: React.FC = () => {
                 ref={canvasRef}
                 segments={segments}
                 labels={labels ?? undefined}
-                pxPerCm={0.25}
+                openings={openings ?? undefined}
+                pxPerCm={1}
                 wallThickness={6}
               />
             )}
@@ -85,6 +96,7 @@ const Home: React.FC = () => {
           <div className="text-xs text-gray-600">
             {autoRefresh && <span>Updating every 2 seconds…</span>}
           </div>
+          <div className="text-xs text-gray-700">Rooms detected: {roomCenters?.length ?? 0}</div>
           <button
             onClick={() => canvasRef.current?.reset()}
             className="px-3 py-2 bg-blue-500 text-white text-sm rounded hover:bg-blue-600"

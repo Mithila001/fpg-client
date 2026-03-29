@@ -1,53 +1,64 @@
 import client from "./client";
 import type { Coordinate, Label } from "../components/Konva/shapes/types";
 import { apiRawToCm } from "../utils/units";
+import type {
+  CompactByRoom,
+  CompactOpening,
+  FormatResponse,
+  Point,
+  Wall,
+  CanvasOpening,
+  OpeningKind,
+} from "../types";
+import { getRoomCenterFromWalls } from "../utils/roomGeometry";
 
-export interface Point {
-  x: number;
-  y: number;
-}
+const normalizeWallToCm = (wall: Wall): Wall => ({
+  x1: apiRawToCm(wall.x1),
+  y1: apiRawToCm(wall.y1),
+  x2: apiRawToCm(wall.x2),
+  y2: apiRawToCm(wall.y2),
+});
 
-export interface Wall {
-  x1: number;
-  y1: number;
-  x2: number;
-  y2: number;
-}
+const normalizeOpeningToCm = (opening: CompactOpening): CompactOpening => ({
+  ...opening,
+  x1: apiRawToCm(opening.x1),
+  y1: apiRawToCm(opening.y1),
+  x2: apiRawToCm(opening.x2),
+  y2: apiRawToCm(opening.y2),
+});
 
-// rooms returned alongside wall geometry
-export interface Room {
-  name: string;
-  type: string;
-  center: Point;
-}
+const normalizeCompactByRoomToCm = (compactByRoom?: CompactByRoom): CompactByRoom | undefined => {
+  if (!compactByRoom) return undefined;
 
-export type PlanStatus = "FEASIBLE" | "INFEASIBLE" | "ERROR" | string;
+  const normalized: CompactByRoom = {};
+  for (const [roomKey, room] of Object.entries(compactByRoom)) {
+    normalized[roomKey] = {
+      ...room,
+      walls: (room.walls ?? []).map(normalizeWallToCm),
+      openings: (room.openings ?? []).map(normalizeOpeningToCm),
+    };
+  }
 
-// response shape returned by the backend solver
-export interface FormatResponse {
-  status: PlanStatus;
-  message: string;
-  walls: Wall[];
-  rooms?: Room[];
-}
+  return normalized;
+};
+
+const openingTypeToKind = (openingType: string): OpeningKind => {
+  return openingType.toLowerCase().includes("window") ? "window" : "door";
+};
+
+const openingKey = (opening: CompactOpening): string => {
+  const a = `${opening.x1.toFixed(3)}:${opening.y1.toFixed(3)}`;
+  const b = `${opening.x2.toFixed(3)}:${opening.y2.toFixed(3)}`;
+  const endpoints = [a, b].sort().join("|");
+  return `${opening.opening_type}|${endpoints}`;
+};
 
 // Normalize backend payload values to internal centimeters.
 export function normalizeApiResponseToCm(resp: FormatResponse): FormatResponse {
   return {
     ...resp,
-    walls: (resp.walls ?? []).map((wall) => ({
-      x1: apiRawToCm(wall.x1),
-      y1: apiRawToCm(wall.y1),
-      x2: apiRawToCm(wall.x2),
-      y2: apiRawToCm(wall.y2),
-    })),
-    rooms: resp.rooms?.map((room) => ({
-      ...room,
-      center: {
-        x: apiRawToCm(room.center.x),
-        y: apiRawToCm(room.center.y),
-      },
-    })),
+    walls: (resp.walls ?? []).map(normalizeWallToCm),
+    compact_by_room: normalizeCompactByRoomToCm(resp.compact_by_room),
   };
 }
 
@@ -71,13 +82,63 @@ export function formatResponseToSegments(resp: FormatResponse): Coordinate[][] {
   ]);
 }
 
-// extract text labels from rooms returned by the service
-export function roomsToLabels(rooms?: Room[]): Label[] {
-  if (!rooms) return [];
-  return rooms.map((room) => ({
-    x: room.center.x,
-    y: room.center.y,
-    text: room.name,
+export function roomCentersFromCompactByRoom(resp: FormatResponse): Coordinate[] {
+  if (!resp.compact_by_room) return [];
+
+  const centers: Coordinate[] = [];
+  for (const room of Object.values(resp.compact_by_room)) {
+    const center: Point | null = getRoomCenterFromWalls(room);
+    if (!center) continue;
+
+    centers.push({
+      x: center.x,
+      y: center.y,
+      label: room.room_name,
+    });
+  }
+
+  return centers;
+}
+
+export function compactRoomsToLabels(resp: FormatResponse): Label[] {
+  return roomCentersFromCompactByRoom(resp).map((center) => ({
+    x: center.x,
+    y: center.y,
+    text: center.label ?? "Room",
   }));
 }
+
+export function compactRoomsToOpenings(resp: FormatResponse): CanvasOpening[] {
+  const compactByRoom = resp.compact_by_room;
+  if (!compactByRoom) return [];
+
+  const dedupe = new Set<string>();
+  const openings: CanvasOpening[] = [];
+
+  for (const room of Object.values(compactByRoom)) {
+    for (const opening of room.openings ?? []) {
+      const key = openingKey(opening);
+      if (dedupe.has(key)) continue;
+      dedupe.add(key);
+
+      openings.push({
+        x1: opening.x1,
+        y1: opening.y1,
+        x2: opening.x2,
+        y2: opening.y2,
+        kind: openingTypeToKind(opening.opening_type),
+        openingType: opening.opening_type,
+        side: opening.side,
+        roomName: opening.room_name,
+        roomType: opening.room_type,
+        connectedRoomName: opening.connected_room_name,
+        connectedRoomType: opening.connected_room_type,
+      });
+    }
+  }
+
+  return openings;
+}
+
+export type { FormatResponse } from "../types";
 

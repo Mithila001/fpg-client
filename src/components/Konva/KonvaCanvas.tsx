@@ -1,9 +1,10 @@
 import React, { useState, useEffect, useRef, forwardRef, useImperativeHandle } from "react";
 import { Stage, Layer, Circle, Text, Rect } from "react-konva";
 import Konva from "konva";
-import { Grid, Wall, Labels } from "./shapes";
+import { Grid, Wall, Labels, Openings } from "./shapes";
 import type { Coordinate, Label } from "./shapes";
 import { cmToPx } from "../../utils/units";
+import type { CanvasOpening } from "../../types";
 
 interface CoordinateCanvasProps {
   // optional collection of wall segments (each segment is a polyline)
@@ -12,6 +13,8 @@ interface CoordinateCanvasProps {
   points?: Coordinate[];
   // array of textual labels to place on the stage
   labels?: Label[];
+  // openings to draw on top of walls
+  openings?: CanvasOpening[];
   // pixels-per-centimeter scale for converting internal cm coordinates to canvas px
   pxPerCm?: number;
   // wall thickness in pixels
@@ -23,7 +26,7 @@ export interface CoordinateCanvasHandle {
 }
 
 const CoordinateCanvas = forwardRef<CoordinateCanvasHandle, CoordinateCanvasProps>(
-  ({ segments, points, labels, pxPerCm, wallThickness }, ref) => {
+  ({ segments, points, labels, openings, pxPerCm, wallThickness }, ref) => {
     const scale = pxPerCm ?? 1;
 
     // determine which geometry to render (flatten segments for debugging)
@@ -218,6 +221,11 @@ const CoordinateCanvas = forwardRef<CoordinateCanvasHandle, CoordinateCanvasProp
 
             {/* custom text labels */}
             {scaledLabels && <Labels labels={scaledLabels} />}
+
+            {/* openings rendered as architectural symbols */}
+            {openings && openings.length > 0 && (
+              <Openings openings={openings} pxPerCm={scale} offsetX={offsetX} offsetY={offsetY} />
+            )}
 
             {/* point markers / labels (keep for debugging) */}
             {scaledPoints.map((point, index) => (
