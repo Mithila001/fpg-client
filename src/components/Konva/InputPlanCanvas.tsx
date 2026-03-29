@@ -2,6 +2,11 @@ import React, { useEffect, useMemo, useRef, useState } from "react";
 import { Circle, Layer, Line, Stage, Text } from "react-konva";
 import Konva from "konva";
 import { formatLengthFromCm } from "../../utils/units";
+import {
+  buildRoadPolygonFromPlacement,
+  findNearestBoundarySegment,
+  type RoadPlacement,
+} from "./utils/geometry";
 
 export type CornerKey = "A" | "B" | "C" | "D" | "E" | "F";
 
@@ -16,9 +21,13 @@ interface InputPlanCanvasProps {
   points: RoomPoints;
   borderCount: number;
   editable: boolean;
+  roadMode?: "idle" | "placing";
+  placedRoad?: RoadPlacement | null;
   onAddBorderLine?: () => void;
   onRemoveBorderLine?: () => void;
   onPointsChange: (next: RoomPoints) => void;
+  onRoadPlace?: (placement: RoadPlacement) => void;
+  onRoadCancel?: () => void;
 }
 
 const ALL_KEYS: CornerKey[] = ["A", "B", "C", "D", "E", "F"];
@@ -26,6 +35,10 @@ const PADDING = 24;
 const MIN_EDGE = 24;
 const DEFAULT_WIDTH = 900;
 const DEFAULT_HEIGHT = 620;
+const ROAD_WIDTH = 30;
+const ROAD_LENGTH = 1000;
+const ROAD_GAP = 6;
+const ROAD_SNAP_THRESHOLD = 36;
 
 const distance = (a: RoomPoint, b: RoomPoint): number => {
   const dx = b.x - a.x;
@@ -100,16 +113,27 @@ const InputPlanCanvas: React.FC<InputPlanCanvasProps> = ({
   points,
   borderCount,
   editable,
+  roadMode = "idle",
+  placedRoad = null,
   onAddBorderLine,
   onRemoveBorderLine,
   onPointsChange,
+  onRoadPlace,
+  onRoadCancel,
 }) => {
   const containerRef = useRef<HTMLDivElement>(null);
   const stageRef = useRef<Konva.Stage>(null);
   const [active, setActive] = useState<CornerKey | null>(null);
+  const [previewRoad, setPreviewRoad] = useState<RoadPlacement | null>(null);
   const [dimensions, setDimensions] = useState({ width: DEFAULT_WIDTH, height: DEFAULT_HEIGHT });
   const [stageScale, setStageScale] = useState(1);
   const orderedKeys = useMemo(() => ALL_KEYS.slice(0, borderCount), [borderCount]);
+
+  useEffect(() => {
+    if (roadMode !== "placing") {
+      setPreviewRoad(null);
+    }
+  }, [roadMode]);
 
   useEffect(() => {
     const node = containerRef.current;
@@ -144,6 +168,82 @@ const InputPlanCanvas: React.FC<InputPlanCanvasProps> = ({
     () => orderedKeys.flatMap((key) => [points[key].x, points[key].y]),
     [orderedKeys, points],
   );
+
+  const placedRoadPolygon = useMemo(() => {
+    if (!placedRoad) return null;
+    const result = buildRoadPolygonFromPlacement(points, orderedKeys, placedRoad);
+    return result?.polygon ?? null;
+  }, [placedRoad, points, orderedKeys]);
+
+  const previewRoadPolygon = useMemo(() => {
+    if (!previewRoad) return null;
+    const result = buildRoadPolygonFromPlacement(points, orderedKeys, previewRoad);
+    return result?.polygon ?? null;
+  }, [previewRoad, points, orderedKeys]);
+
+  const roadToLinePoints = (roadPolygon: RoomPoint[]): number[] =>
+    roadPolygon.flatMap((point) => [point.x, point.y]);
+
+  const getPointerInCanvas = (): RoomPoint | null => {
+    const stage = stageRef.current;
+    if (!stage) return null;
+
+    const pointer = stage.getPointerPosition();
+    if (!pointer) return null;
+
+    return {
+      x: pointer.x / stageScale,
+      y: pointer.y / stageScale,
+    };
+  };
+
+  const updateRoadPreview = () => {
+    if (roadMode !== "placing") return;
+
+    const pointer = getPointerInCanvas();
+    if (!pointer) {
+      setPreviewRoad(null);
+      return;
+    }
+
+    const nearest = findNearestBoundarySegment(pointer, points, orderedKeys);
+    if (!nearest || nearest.distance > ROAD_SNAP_THRESHOLD) {
+      setPreviewRoad(null);
+      return;
+    }
+
+    setPreviewRoad({
+      segmentIndex: nearest.segmentIndex,
+      t: nearest.t,
+      width: ROAD_WIDTH,
+      length: ROAD_LENGTH,
+      gap: ROAD_GAP,
+    });
+  };
+
+  const handleRoadPointerDown = (e: Konva.KonvaEventObject<MouseEvent>) => {
+    if (roadMode !== "placing") return;
+
+    if (e.evt.button === 2) {
+      e.evt.preventDefault();
+      setPreviewRoad(null);
+      onRoadCancel?.();
+      return;
+    }
+
+    if (e.evt.button !== 0 || !previewRoad) return;
+
+    onRoadPlace?.(previewRoad);
+    setPreviewRoad(null);
+  };
+
+  const handleContextMenu = (e: Konva.KonvaEventObject<PointerEvent>) => {
+    if (roadMode !== "placing") return;
+
+    e.evt.preventDefault();
+    setPreviewRoad(null);
+    onRoadCancel?.();
+  };
 
   const handleDragMove = (key: CornerKey, e: Konva.KonvaEventObject<DragEvent>) => {
     const candidate = {
@@ -222,8 +322,32 @@ const InputPlanCanvas: React.FC<InputPlanCanvasProps> = ({
         height={dimensions.height}
         scaleX={stageScale}
         scaleY={stageScale}
+        onMouseMove={updateRoadPreview}
+        onMouseDown={handleRoadPointerDown}
+        onContextMenu={handleContextMenu}
       >
         <Layer>
+          {placedRoadPolygon && (
+            <Line
+              points={roadToLinePoints(placedRoadPolygon)}
+              closed
+              fill="#475569"
+              stroke="#1e293b"
+              strokeWidth={2}
+            />
+          )}
+
+          {previewRoadPolygon && (
+            <Line
+              points={roadToLinePoints(previewRoadPolygon)}
+              closed
+              fill="#64748b88"
+              stroke="#334155"
+              strokeWidth={2}
+              dash={[8, 6]}
+            />
+          )}
+
           <Line points={polygon} closed stroke="#0f172a" strokeWidth={6} fill="#dbeafe" />
 
           {orderedKeys.map((key) => {

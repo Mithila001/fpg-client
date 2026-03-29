@@ -1,6 +1,16 @@
 import React, { useMemo, useState } from "react";
 import InputPlanCanvas, { type RoomPoints, type CornerKey } from "../components/Konva/InputPlanCanvas";
-import { calculatePolygonArea, calculatePolygonCentroid, scalePolygon } from "../components/Konva/utils/geometry";
+import {
+  calculatePolygonArea,
+  calculatePolygonCentroid,
+  scalePolygon,
+  type RoadPlacement,
+} from "../components/Konva/utils/geometry";
+import {
+  getUsableLand,
+  type UsableLandPayload,
+  type UsableLandRoadConnectedSegment,
+} from "../api/getUsableLand.ts";
 import {
   formatAreaFromCm2,
   formatLengthFromCm,
@@ -15,6 +25,17 @@ const distance = (a: { x: number; y: number }, b: { x: number; y: number }): num
   const dx = b.x - a.x;
   const dy = b.y - a.y;
   return Math.sqrt(dx * dx + dy * dy);
+};
+
+const buildClosedLoopCoordinates = (
+  points: RoomPoints,
+  orderedKeys: CornerKey[],
+): Array<{ x: number; y: number }> => {
+  const loop = orderedKeys.map((key) => ({ x: points[key].x, y: points[key].y }));
+  if (loop.length > 0) {
+    loop.push({ ...loop[0] });
+  }
+  return loop;
 };
 
 const InputPlan: React.FC = () => {
@@ -33,6 +54,9 @@ const InputPlan: React.FC = () => {
   const [targetAreaInput, setTargetAreaInput] = useState<string>("");
   const [lastAppliedArea, setLastAppliedArea] = useState<number | null>(null);
   const [scaleError, setScaleError] = useState<string | null>(null);
+  const [roadMode, setRoadMode] = useState<"idle" | "placing">("idle");
+  const [placedRoads, setPlacedRoads] = useState<RoadPlacement[]>([]);
+  const [runAlgoStatus, setRunAlgoStatus] = useState<string | null>(null);
 
   const currentArea = useMemo(() => {
     return calculatePolygonArea(points, KEYS.slice(0, borderCount));
@@ -73,6 +97,59 @@ const InputPlan: React.FC = () => {
     setTargetAreaInput("");
     setLastAppliedArea(null);
     setScaleError(null);
+    setRoadMode("idle");
+    setPlacedRoads([]);
+    setRunAlgoStatus(null);
+  };
+
+  const handleRoadButtonClick = () => {
+    if (!isConfirmed || lastAppliedArea === null) return;
+    setRoadMode((prev) => (prev === "placing" ? "idle" : "placing"));
+  };
+
+  const handleRoadPlace = (placement: RoadPlacement) => {
+    // Keep single-road UX for now while preserving array-compatible storage.
+    setPlacedRoads([placement]);
+    setRoadMode("idle");
+    setRunAlgoStatus(null);
+  };
+
+  const handleRoadCancel = () => {
+    setRoadMode("idle");
+  };
+
+  const handleRunAlgorithm = async () => {
+    if (placedRoads.length === 0) return;
+
+    const orderedKeys = KEYS.slice(0, borderCount);
+    const area = calculatePolygonArea(points, orderedKeys);
+
+    const roadConnected: UsableLandRoadConnectedSegment[] = placedRoads
+      .map((road) => {
+        const startKey = orderedKeys[road.segmentIndex];
+        const endKey = orderedKeys[(road.segmentIndex + 1) % orderedKeys.length];
+        if (!startKey || !endKey) {
+          return null;
+        }
+
+        return {
+          segment: [
+            { x: points[startKey].x, y: points[startKey].y },
+            { x: points[endKey].x, y: points[endKey].y },
+          ],
+          roadType: "mainRoad",
+        };
+      })
+      .filter((item): item is UsableLandRoadConnectedSegment => item !== null);
+
+    const payload: UsableLandPayload = {
+      area,
+      segmentsCoordinates: buildClosedLoopCoordinates(points, orderedKeys),
+      roadConnected,
+    };
+
+    await getUsableLand(payload);
+    setRunAlgoStatus("Run payload printed. Check browser console output.");
   };
 
   const handleApplyArea = () => {
@@ -112,9 +189,13 @@ const InputPlan: React.FC = () => {
               points={points}
               borderCount={borderCount}
               editable={!isConfirmed}
+              roadMode={roadMode}
+              placedRoad={placedRoads[0] ?? null}
               onAddBorderLine={addBorderLine}
               onRemoveBorderLine={removeBorderLine}
               onPointsChange={setPoints}
+              onRoadPlace={handleRoadPlace}
+              onRoadCancel={handleRoadCancel}
             />
           </div>
         </div>
@@ -174,6 +255,41 @@ const InputPlan: React.FC = () => {
                 >
                   Apply Area
                 </button>
+
+                <div className="rounded border border-slate-200 bg-slate-50 p-2 flex flex-col gap-2">
+                  <button
+                    onClick={handleRoadButtonClick}
+                    disabled={!isConfirmed || lastAppliedArea === null}
+                    className="px-3 py-2 bg-slate-700 text-white text-sm rounded hover:bg-slate-800 disabled:opacity-50 disabled:cursor-not-allowed w-full"
+                  >
+                    {roadMode === "placing" ? "Cancel Road" : "Add Road"}
+                  </button>
+
+                  {roadMode === "placing" && (
+                    <div className="text-[11px] text-slate-600">
+                      Place Road mode is active. Hover near a boundary segment, left click to place, right click to cancel.
+                    </div>
+                  )}
+
+                  {placedRoads.length > 0 && roadMode !== "placing" && (
+                    <div className="text-[11px] text-emerald-700">
+                      Road placed on border segment {placedRoads[0].segmentIndex + 1}.
+                    </div>
+                  )}
+
+                  {placedRoads.length > 0 && (
+                    <button
+                      onClick={handleRunAlgorithm}
+                      className="px-3 py-2 bg-indigo-600 text-white text-sm rounded hover:bg-indigo-700 w-full"
+                    >
+                      Run Algorithm
+                    </button>
+                  )}
+
+                  {runAlgoStatus && (
+                    <div className="text-[11px] text-indigo-700">{runAlgoStatus}</div>
+                  )}
+                </div>
 
                 {lastAppliedArea !== null && (
                   <div className="text-xs text-emerald-700 mt-2">
