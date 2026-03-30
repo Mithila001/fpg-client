@@ -125,7 +125,7 @@ const ConfigureRooms: React.FC = () => {
         data: roomData,
       },
       should_optuna_run: true,
-      optuna_trial_count: 50,
+      optuna_trial_count: 20,
     };
 
     setSubmitStatus("Redirecting to Home and generating floor plan...");
