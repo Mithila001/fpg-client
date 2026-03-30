@@ -1,17 +1,25 @@
-import React, { useState, useEffect, useRef, useCallback } from "react";
+import React, { useState, useRef, useCallback, useEffect } from "react";
+import { useLocation } from "react-router-dom";
 import CoordinateCanvas from "../components/Konva/KonvaCanvas";
 import type { CoordinateCanvasHandle } from "../components/Konva/KonvaCanvas";
 import {
   compactRoomsToLabels,
   compactRoomsToOpenings,
   fetchFormattedPlan,
+  formatFloorPlanV2,
   formatResponseToSegments,
   roomCentersFromCompactByRoom,
+  type FormatV2Request,
 } from "../api/floorPlan";
 import type { Coordinate, Label } from "../components/Konva/shapes/types";
 import type { CanvasOpening } from "../types";
 
+type HomeRouteState = {
+  generateRequest?: FormatV2Request;
+};
+
 const Home: React.FC = () => {
+  const location = useLocation();
   const canvasRef = useRef<CoordinateCanvasHandle>(null);
   const [segments, setSegments] = useState<Coordinate[][] | null>(null);
   const [labels, setLabels] = useState<Label[] | null>(null);
@@ -23,17 +31,17 @@ const Home: React.FC = () => {
   const inFlightRef = useRef(false);
 
   // helper to fetch and update data
-  const load = useCallback(async () => {
+  const load = useCallback(async (request?: FormatV2Request, skipThrottle = false) => {
     const now = Date.now();
     if (inFlightRef.current) return;
-    if (now - lastRequestAtRef.current < 2000) return;
+    if (!skipThrottle && now - lastRequestAtRef.current < 2000) return;
 
     lastRequestAtRef.current = now;
     inFlightRef.current = true;
     setLoading(true);
     setError(null);
     try {
-      const data = await fetchFormattedPlan();
+      const data = request ? await formatFloorPlanV2(request) : await fetchFormattedPlan();
       setSegments(formatResponseToSegments(data));
       setRoomCenters(roomCentersFromCompactByRoom(data));
       setLabels(compactRoomsToLabels(data));
@@ -48,10 +56,12 @@ const Home: React.FC = () => {
     }
   }, []);
 
-  // fetch formatted walls on component mount
   useEffect(() => {
-    void load();
-  }, [load]);
+    const routeState = (location.state ?? null) as HomeRouteState | null;
+    if (!routeState?.generateRequest) return;
+
+    void load(routeState.generateRequest, true);
+  }, [location.state, load]);
 
   return (
     // ensure this page fills the available space and never scrolls

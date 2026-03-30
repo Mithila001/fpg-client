@@ -1,6 +1,7 @@
 import React, { useMemo, useState } from "react";
-import { useLocation } from "react-router-dom";
+import { useLocation, useNavigate } from "react-router-dom";
 import { formatLengthFromCm, parseMetersInputToCm } from "../utils/units";
+import type { FormatV2Request } from "../api/floorPlan";
 
 type OptionalRoomType = "bathroom" | "bedroom" | "kitchen";
 
@@ -43,6 +44,7 @@ const ConfigureRooms: React.FC = () => {
   const [floorWidthInput, setFloorWidthInput] = useState<string>("");
   const [floorHeightInput, setFloorHeightInput] = useState<string>("");
   const [submitStatus, setSubmitStatus] = useState<string | null>(null);
+  const navigate = useNavigate();
 
   const selectedRoomSummary = useMemo(() => {
     const picked = (Object.keys(roomLabels) as OptionalRoomType[])
@@ -109,28 +111,29 @@ const ConfigureRooms: React.FC = () => {
       return;
     }
 
-    const payload = {
-      roomRequirements: {
-        bathroom: selectedRooms.bathroom ? roomCounts.bathroom : 0,
-        bedroom: selectedRooms.bedroom ? roomCounts.bedroom : 0,
-        kitchen: selectedRooms.kitchen ? roomCounts.kitchen : 0,
-        // Living room is intentionally excluded from payload because backend auto-includes it.
+    const roomData = [
+      selectedRooms.bathroom && { id: "bathroom1", type: "bathroom" },
+      selectedRooms.bedroom && { id: "bedroom1", type: "bedroom" },
+      selectedRooms.kitchen && { id: "kitchen1", type: "kitchen" },
+    ].filter((item): item is { id: string; type: string } => item !== false);
+
+    const payload: FormatV2Request = {
+      floor_width: floorWidthCm,
+      floor_height: floorHeightCm,
+      room_template: {
+        name: "Custom Layout",
+        data: roomData,
       },
-      floor: {
-        width: floorWidthCm,
-        height: floorHeightCm,
-      },
+      should_optuna_run: true,
+      optuna_trial_count: 50,
     };
 
-    setSubmitStatus("Submitting room configuration...");
-
-    try {
-      await new Promise((resolve) => setTimeout(resolve, 700));
-      void payload;
-      setSubmitStatus("Placeholder submit complete. API integration will be added later.");
-    } catch {
-      setSubmitStatus("Placeholder submit failed. Please try again.");
-    }
+    setSubmitStatus("Redirecting to Home and generating floor plan...");
+    navigate("/", {
+      state: {
+        generateRequest: payload,
+      },
+    });
   };
 
   return (

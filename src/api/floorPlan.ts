@@ -74,6 +74,28 @@ export async function fetchFormattedPlan(): Promise<FormatResponse> {
   return normalizeApiResponseToCm(data);
 }
 
+export interface FormatV2Request {
+  floor_width: number;
+  floor_height: number;
+  room_template: {
+    name: string;
+    data: Array<{ id: string; type: string }>;
+  };
+  should_optuna_run: boolean;
+  optuna_trial_count: number;
+}
+
+export async function formatFloorPlanV2(request: FormatV2Request): Promise<FormatResponse> {
+  const response = await client.post<FormatResponse>("/algorithms/format/v2", request);
+  const data = response.data;
+
+  if (data.status !== "FEASIBLE") {
+    throw new Error(data.message || `Plan status is ${data.status}`);
+  }
+
+  return normalizeApiResponseToCm(data);
+}
+
 // convert response walls into 2-point polyline segments for Konva
 export function formatResponseToSegments(resp: FormatResponse): Coordinate[][] {
   return (resp.walls ?? []).map((wall) => [
