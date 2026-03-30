@@ -1,4 +1,4 @@
-import { normalizeApiResponseToCm, type FormatResponse } from "../api/floorPlan";
+import { normalizeApiResponseToCm, type FormatResponse } from "../api/floorPlanFormatApi";
 
 export async function fetchFormattedPlanBypass(): Promise<FormatResponse> {
   const raw: FormatResponse = {

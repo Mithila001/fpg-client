@@ -30,18 +30,21 @@ This file documents the user workflow in the `Caves` page and related canvas com
   - state: polygon points, border count, confirmation flag, road placement, algorithm outputs, generated floor plan data.
   - actions: confirm/edit shape, apply area, add/remove border, road placement toggle, run algorithm, configure room data, generate floor plan.
 
-- `CavesCanvas.tsx`: chooses between two canvas modes:
-  - `mode === "edit"` → renders `InputPlanCanvas`
-  - `mode === "view"` → renders `KonvaCanvas` (or empty/loading messages)
+- `process/UnifiedProcessCanvas.tsx`: single process-canvas shell for both steps.
+  - `mode === "edit"` → renders `process/StepAEditLayer.tsx`
+  - `mode === "view"` → renders `process/StepBFloorPlanLayer.tsx`
+  - keeps one shared white canvas surface style while mode toggles preserve flow.
 
-- `InputPlanCanvas.tsx`: implements step A interactions:
+- `CavesCanvas.tsx`: compatibility export pointing to `process/UnifiedProcessCanvas.tsx`.
+
+- `InputPlanCanvas.tsx` (used by `process/StepAEditLayer.tsx`): implements step A interactions:
   - drag points with boundary validity checks (`isValidPolygon`, `isConvexPolygon`, min edge distance),
   - compute/display edge distances,
   - road placement preview and commit,
   - buildable rectangle and shrunk boundary drawing,
   - zoom, pan, fit-to-geometry, and helper controls.
 
-- `KonvaCanvas.tsx`: implements step B preview:
+- `KonvaCanvas.tsx` (used by `process/StepBFloorPlanLayer.tsx`): implements step B preview:
   - scales + offset for generated geometry,
   - grid draw, wall segments draw, label draw, openings draw,
   - zoom/pan state, wheel-based zoom and pan, reset via ref,
@@ -50,7 +53,7 @@ This file documents the user workflow in the `Caves` page and related canvas com
 ### Metadata
 
 - Last updated: 2026-03-30
-- Maintainer note: If the source code for `Caves.tsx`, `CavesCanvas.tsx`, `InputPlanCanvas.tsx`, or `KonvaCanvas.tsx` changes, update this section to reflect:
+- Maintainer note: If the source code for `Caves.tsx`, `process/UnifiedProcessCanvas.tsx`, `process/StepAEditLayer.tsx`, `process/StepBFloorPlanLayer.tsx`, `InputPlanCanvas.tsx`, or `KonvaCanvas.tsx` changes, update this section to reflect:
   1. Changed component responsibilities.
   2. Modified user action sequence.
   3. Updated props or event callback names.

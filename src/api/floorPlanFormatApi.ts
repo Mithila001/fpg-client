@@ -62,18 +62,6 @@ export function normalizeApiResponseToCm(resp: FormatResponse): FormatResponse {
   };
 }
 
-// call the backend formatter endpoint and only accept feasible plans
-export async function fetchFormattedPlan(): Promise<FormatResponse> {
-  const response = await client.get<FormatResponse>("/algorithms/format");
-  const data = response.data;
-
-  if (data.status !== "FEASIBLE") {
-    throw new Error(data.message || `Plan status is ${data.status}`);
-  }
-
-  return normalizeApiResponseToCm(data);
-}
-
 export interface FormatV2Request {
   floor_width: number;
   floor_height: number;

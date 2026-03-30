@@ -1,5 +1,5 @@
 import React, { useMemo, useState } from "react";
-import CavesCanvas from "../components/Konva/CavesCanvas";
+import UnifiedProcessCanvas from "../components/Konva/process/UnifiedProcessCanvas";
 import type { RoomPoints, CornerKey } from "../components/Konva/InputPlanCanvas";
 import {
   calculatePolygonArea,
@@ -12,20 +12,22 @@ import {
   type UsableLandPayload,
   type UsableLandPoint,
   type UsableLandRoadConnectedSegment,
-} from "../api/getUsableLand";
+} from "../api/usableLandApi";
 import {
   compactRoomsToLabels,
   compactRoomsToOpenings,
   formatFloorPlanV2,
   formatResponseToSegments,
   roomCentersFromCompactByRoom,
-} from "../api/floorPlan";
+} from "../api/floorPlanFormatApi";
 import type { Coordinate, Label } from "../components/Konva/shapes/types";
 import type { CanvasOpening } from "../types";
 import {
   formatAreaFromCm2,
   formatLengthFromCm,
-  parseAreaM2InputToCm2,
+  unitConverter_updateLabelMeters,
+  unitConverter_systemDimensionsCmToMetersDisplay,
+  unitConverter_userInputSqMetersToSystemCm2,
 } from "../utils/units";
 import ConfigureRoomsModal, {
   type SubmittedRoomRequirements,
@@ -98,7 +100,7 @@ const Caves: React.FC = () => {
       .map((key, idx) => {
         const next = orderedKeys[(idx + 1) % orderedKeys.length];
         const len = distance(points[key], points[next]);
-        return `${key}->${next}: ${formatLengthFromCm(len, 2)}`;
+        return unitConverter_updateLabelMeters(`${key}->${next}`, len, 2);
       })
       .join(" | ");
   }, [orderedKeys, points]);
@@ -174,7 +176,7 @@ const Caves: React.FC = () => {
     if (isRunningAlgorithm || isGeneratingFloorPlan) return;
     if (!confirmedBasePoints) return;
 
-    const targetAreaCm2 = parseAreaM2InputToCm2(targetAreaInput);
+    const targetAreaCm2 = unitConverter_userInputSqMetersToSystemCm2(targetAreaInput);
     if (targetAreaCm2 === null || targetAreaCm2 <= 0) {
       setScaleError("Please enter a valid positive number for area (m2).");
       return;
@@ -328,7 +330,7 @@ const Caves: React.FC = () => {
             {canvasMode === "edit" ? "Step A: Land Boundary Workspace" : "Step B: Floor Plan Preview"}
           </div>
           <div className="min-h-0 flex-1 overflow-hidden rounded border border-slate-200 bg-white p-1">
-            <CavesCanvas
+            <UnifiedProcessCanvas
               mode={canvasMode}
               editState={{
                 points,
@@ -478,7 +480,7 @@ const Caves: React.FC = () => {
                 <div className="font-medium text-slate-800">Saved Room Requirements</div>
                 <div>{submittedRequirements?.roomSummary ?? "Not submitted yet."}</div>
                 <div>
-                  Floor Size: {submittedRequirements ? `${submittedRequirements.floorWidthCm / 100} m x ${submittedRequirements.floorHeightCm / 100} m` : "Not set"}
+                  Floor Size: {submittedRequirements ? unitConverter_systemDimensionsCmToMetersDisplay(submittedRequirements.floorWidthCm, submittedRequirements.floorHeightCm, 2) : "Not set"}
                 </div>
               </div>
 

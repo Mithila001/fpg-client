@@ -175,7 +175,7 @@ const CoordinateCanvas = forwardRef<CoordinateCanvasHandle, CoordinateCanvasProp
   return (
     // minimal wrapper: this div is measured to provide dimensions
     // use full size so parent resizing triggers ResizeObserver
-    <div ref={containerRef} style={{ width: "100%", height: "100%" }} className="bg-red-200">
+    <div ref={containerRef} style={{ width: "100%", height: "100%" }} className="bg-white">
       {dimensions.width > 0 && (
         <Stage
           ref={stageRef}

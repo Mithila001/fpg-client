@@ -1,6 +1,10 @@
 import React, { useEffect, useMemo, useState } from "react";
-import type { FormatV2Request } from "../api/floorPlan";
-import { formatLengthFromCm, parseMetersInputToCm } from "../utils/units";
+import type { FormatV2Request } from "../api/floorPlanFormatApi";
+import {
+  formatLengthFromCm,
+  unitConverter_systemCmToMetersDisplay,
+  unitConverter_userInputMetersToSystemCm,
+} from "../utils/units";
 
 type OptionalRoomType = "bathroom" | "bedroom" | "kitchen";
 
@@ -82,8 +86,12 @@ const ConfigureRoomsModal: React.FC<ConfigureRoomsModalProps> = ({
 
     setSelectedRooms(nextSelected);
     setRoomCounts(nextCounts);
-    setFloorWidthInput((initialRequirements.floorWidthCm / 100).toString());
-    setFloorHeightInput((initialRequirements.floorHeightCm / 100).toString());
+    setFloorWidthInput(
+      unitConverter_systemCmToMetersDisplay(initialRequirements.floorWidthCm, 2).replace(" m", ""),
+    );
+    setFloorHeightInput(
+      unitConverter_systemCmToMetersDisplay(initialRequirements.floorHeightCm, 2).replace(" m", ""),
+    );
     setSubmitStatus(null);
   }, [isOpen, initialRequirements]);
 
@@ -136,8 +144,8 @@ const ConfigureRoomsModal: React.FC<ConfigureRoomsModalProps> = ({
       return;
     }
 
-    const floorWidthCm = parseMetersInputToCm(floorWidthInput);
-    const floorHeightCm = parseMetersInputToCm(floorHeightInput);
+    const floorWidthCm = unitConverter_userInputMetersToSystemCm(floorWidthInput);
+    const floorHeightCm = unitConverter_userInputMetersToSystemCm(floorHeightInput);
 
     if (floorWidthCm === null || floorWidthCm <= 0) {
       setSubmitStatus("Enter a valid positive floor width.");
