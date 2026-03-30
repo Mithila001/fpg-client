@@ -1,4 +1,4 @@
-import React, { useEffect, useMemo, useRef, useState } from "react";
+import React, { useCallback, useEffect, useMemo, useRef, useState } from "react";
 import { Circle, Layer, Line, Stage, Text } from "react-konva";
 import Konva from "konva";
 import { formatLengthFromCm } from "../../utils/units";
@@ -23,6 +23,8 @@ interface InputPlanCanvasProps {
   editable: boolean;
   roadMode?: "idle" | "placing";
   placedRoad?: RoadPlacement | null;
+  buildableRectangle?: RoomPoint[] | null;
+  shrunkBoundary?: RoomPoint[] | null;
   onAddBorderLine?: () => void;
   onRemoveBorderLine?: () => void;
   onPointsChange: (next: RoomPoints) => void;
@@ -39,6 +41,9 @@ const ROAD_WIDTH = 30;
 const ROAD_LENGTH = 1000;
 const ROAD_GAP = 6;
 const ROAD_SNAP_THRESHOLD = 36;
+const FIT_PADDING = 36;
+const MIN_VIEW_SCALE = 0.2;
+const MAX_VIEW_SCALE = 3;
 
 const distance = (a: RoomPoint, b: RoomPoint): number => {
   const dx = b.x - a.x;
@@ -115,6 +120,8 @@ const InputPlanCanvas: React.FC<InputPlanCanvasProps> = ({
   editable,
   roadMode = "idle",
   placedRoad = null,
+  buildableRectangle = null,
+  shrunkBoundary = null,
   onAddBorderLine,
   onRemoveBorderLine,
   onPointsChange,
@@ -127,6 +134,8 @@ const InputPlanCanvas: React.FC<InputPlanCanvasProps> = ({
   const [previewRoad, setPreviewRoad] = useState<RoadPlacement | null>(null);
   const [dimensions, setDimensions] = useState({ width: DEFAULT_WIDTH, height: DEFAULT_HEIGHT });
   const [stageScale, setStageScale] = useState(1);
+  const [stageX, setStageX] = useState(0);
+  const [stageY, setStageY] = useState(0);
   const orderedKeys = useMemo(() => ALL_KEYS.slice(0, borderCount), [borderCount]);
 
   useEffect(() => {
@@ -184,6 +193,66 @@ const InputPlanCanvas: React.FC<InputPlanCanvasProps> = ({
   const roadToLinePoints = (roadPolygon: RoomPoint[]): number[] =>
     roadPolygon.flatMap((point) => [point.x, point.y]);
 
+  const buildableRectanglePoints = useMemo(() => {
+    if (!buildableRectangle || buildableRectangle.length < 3) return null;
+    return buildableRectangle.flatMap((point) => [point.x, point.y]);
+  }, [buildableRectangle]);
+
+  const shrunkBoundaryPoints = useMemo(() => {
+    if (!shrunkBoundary || shrunkBoundary.length < 3) return null;
+    return shrunkBoundary.flatMap((point) => [point.x, point.y]);
+  }, [shrunkBoundary]);
+
+  const allGeometryPoints = useMemo(() => {
+    const base = orderedKeys.map((key) => points[key]);
+    if (buildableRectangle && buildableRectangle.length > 0) {
+      base.push(...buildableRectangle);
+    }
+    if (shrunkBoundary && shrunkBoundary.length > 0) {
+      base.push(...shrunkBoundary);
+    }
+    return base;
+  }, [orderedKeys, points, buildableRectangle, shrunkBoundary]);
+
+  const fitToGeometry = useCallback(() => {
+    if (dimensions.width <= 0 || dimensions.height <= 0 || allGeometryPoints.length === 0) {
+      setStageScale(1);
+      setStageX(0);
+      setStageY(0);
+      return;
+    }
+
+    const minX = Math.min(...allGeometryPoints.map((p) => p.x));
+    const maxX = Math.max(...allGeometryPoints.map((p) => p.x));
+    const minY = Math.min(...allGeometryPoints.map((p) => p.y));
+    const maxY = Math.max(...allGeometryPoints.map((p) => p.y));
+
+    const bboxWidth = Math.max(1, maxX - minX);
+    const bboxHeight = Math.max(1, maxY - minY);
+    const availableWidth = Math.max(1, dimensions.width - FIT_PADDING * 2);
+    const availableHeight = Math.max(1, dimensions.height - FIT_PADDING * 2);
+
+    const nextScale = clamp(
+      Math.min(availableWidth / bboxWidth, availableHeight / bboxHeight),
+      MIN_VIEW_SCALE,
+      MAX_VIEW_SCALE,
+    );
+
+    const nextX = (dimensions.width - bboxWidth * nextScale) / 2 - minX * nextScale;
+    const nextY = (dimensions.height - bboxHeight * nextScale) / 2 - minY * nextScale;
+
+    setStageScale(nextScale);
+    setStageX(nextX);
+    setStageY(nextY);
+  }, [allGeometryPoints, dimensions.height, dimensions.width]);
+
+  useEffect(() => {
+    if (dimensions.width <= 0 || dimensions.height <= 0) return;
+    if (editable && active) return;
+
+    fitToGeometry();
+  }, [fitToGeometry, dimensions.width, dimensions.height, editable, active]);
+
   const getPointerInCanvas = (): RoomPoint | null => {
     const stage = stageRef.current;
     if (!stage) return null;
@@ -192,8 +261,8 @@ const InputPlanCanvas: React.FC<InputPlanCanvasProps> = ({
     if (!pointer) return null;
 
     return {
-      x: pointer.x / stageScale,
-      y: pointer.y / stageScale,
+      x: (pointer.x - stageX) / stageScale,
+      y: (pointer.y - stageY) / stageScale,
     };
   };
 
@@ -311,8 +380,26 @@ const InputPlanCanvas: React.FC<InputPlanCanvasProps> = ({
     onRemoveBorderLine();
   };
 
-  const handleZoomIn = () => setStageScale(prev => Math.min(3, prev + 0.2));
-  const handleZoomOut = () => setStageScale(prev => Math.max(0.4, prev - 0.2));
+  const zoomFromViewportCenter = (delta: number) => {
+    const nextScale = clamp(stageScale + delta, MIN_VIEW_SCALE, MAX_VIEW_SCALE);
+    if (Math.abs(nextScale - stageScale) < 1e-6) return;
+
+    const center = {
+      x: dimensions.width / 2,
+      y: dimensions.height / 2,
+    };
+
+    const nextX = center.x - ((center.x - stageX) * nextScale) / stageScale;
+    const nextY = center.y - ((center.y - stageY) * nextScale) / stageScale;
+
+    setStageScale(nextScale);
+    setStageX(nextX);
+    setStageY(nextY);
+  };
+
+  const handleZoomIn = () => zoomFromViewportCenter(0.2);
+  const handleZoomOut = () => zoomFromViewportCenter(-0.2);
+  const handleResetZoom = () => fitToGeometry();
 
   return (
     <div ref={containerRef} className="relative h-full w-full rounded-lg border border-gray-200 bg-white overflow-hidden">
@@ -322,6 +409,8 @@ const InputPlanCanvas: React.FC<InputPlanCanvasProps> = ({
         height={dimensions.height}
         scaleX={stageScale}
         scaleY={stageScale}
+        x={stageX}
+        y={stageY}
         onMouseMove={updateRoadPreview}
         onMouseDown={handleRoadPointerDown}
         onContextMenu={handleContextMenu}
@@ -350,6 +439,25 @@ const InputPlanCanvas: React.FC<InputPlanCanvasProps> = ({
 
           <Line points={polygon} closed stroke="#0f172a" strokeWidth={6} fill="#dbeafe" />
 
+          {buildableRectanglePoints && (
+            <Line
+              points={buildableRectanglePoints}
+              closed
+              fill="#dc262633"
+              stroke="#dc2626"
+              strokeWidth={3}
+            />
+          )}
+
+          {shrunkBoundaryPoints && (
+            <Line
+              points={shrunkBoundaryPoints}
+              closed
+              stroke="#7c2d12"
+              strokeWidth={3}
+            />
+          )}
+
           {orderedKeys.map((key) => {
             const point = points[key];
             return (
@@ -363,10 +471,9 @@ const InputPlanCanvas: React.FC<InputPlanCanvasProps> = ({
                   strokeWidth={2}
                   draggable={editable}
                   dragBoundFunc={(pos) => {
-                    const scale = stageScale;
                     return {
-                      x: clamp(pos.x, PADDING * scale, (dimensions.width - PADDING) * scale),
-                      y: clamp(pos.y, PADDING * scale, (dimensions.height - PADDING) * scale),
+                      x: clamp(pos.x, PADDING, dimensions.width - PADDING),
+                      y: clamp(pos.y, PADDING, dimensions.height - PADDING),
                     };
                   }}
                   onDragStart={() => editable && setActive(key)}
@@ -440,13 +547,20 @@ const InputPlanCanvas: React.FC<InputPlanCanvasProps> = ({
         >
           -
         </button>
-        {stageScale !== 1 && (
+        <button
+          onClick={handleResetZoom}
+          className="px-2 h-8 flex items-center justify-center rounded bg-gray-100 border border-gray-300 text-[11px] text-gray-700 hover:bg-gray-200"
+          title="Fit View"
+        >
+          Fit
+        </button>
+        {Math.abs(stageScale - 1) > 1e-6 && (
           <button
-            onClick={() => setStageScale(1)}
+            onClick={handleResetZoom}
             className="w-8 h-8 flex items-center justify-center rounded bg-gray-100 border border-gray-300 text-xs text-gray-700 hover:bg-gray-200"
-            title="Reset Zoom"
+            title="Reset View"
           >
-            1x
+            1:1
           </button>
         )}
       </div>

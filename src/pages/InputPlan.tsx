@@ -9,6 +9,7 @@ import {
 import {
   getUsableLand,
   type UsableLandPayload,
+  type UsableLandPoint,
   type UsableLandRoadConnectedSegment,
 } from "../api/getUsableLand.ts";
 import {
@@ -57,6 +58,9 @@ const InputPlan: React.FC = () => {
   const [roadMode, setRoadMode] = useState<"idle" | "placing">("idle");
   const [placedRoads, setPlacedRoads] = useState<RoadPlacement[]>([]);
   const [runAlgoStatus, setRunAlgoStatus] = useState<string | null>(null);
+  const [isRunningAlgorithm, setIsRunningAlgorithm] = useState(false);
+  const [buildableRectangleVertices, setBuildableRectangleVertices] = useState<UsableLandPoint[] | null>(null);
+  const [shrunkBoundary, setShrunkBoundary] = useState<UsableLandPoint[] | null>(null);
 
   const currentArea = useMemo(() => {
     return calculatePolygonArea(points, KEYS.slice(0, borderCount));
@@ -84,11 +88,13 @@ const InputPlan: React.FC = () => {
   };
 
   const handleConfirmShape = () => {
+    if (isRunningAlgorithm) return;
     setIsConfirmed(true);
     setConfirmedBasePoints(points);
   };
 
   const handleEditShape = () => {
+    if (isRunningAlgorithm) return;
     setIsConfirmed(false);
     if (confirmedBasePoints) {
       setPoints(confirmedBasePoints);
@@ -100,9 +106,12 @@ const InputPlan: React.FC = () => {
     setRoadMode("idle");
     setPlacedRoads([]);
     setRunAlgoStatus(null);
+    setBuildableRectangleVertices(null);
+    setShrunkBoundary(null);
   };
 
   const handleRoadButtonClick = () => {
+    if (isRunningAlgorithm) return;
     if (!isConfirmed || lastAppliedArea === null) return;
     setRoadMode((prev) => (prev === "placing" ? "idle" : "placing"));
   };
@@ -119,7 +128,10 @@ const InputPlan: React.FC = () => {
   };
 
   const handleRunAlgorithm = async () => {
-    if (placedRoads.length === 0) return;
+    if (placedRoads.length === 0 || isRunningAlgorithm) return;
+
+    setIsRunningAlgorithm(true);
+    setRunAlgoStatus("Running algorithm...");
 
     const orderedKeys = KEYS.slice(0, borderCount);
     const area = calculatePolygonArea(points, orderedKeys);
@@ -146,13 +158,36 @@ const InputPlan: React.FC = () => {
       area,
       segmentsCoordinates: buildClosedLoopCoordinates(points, orderedKeys),
       roadConnected,
+      min_width: 100,
+      min_height: 100,
+      should_plot: true,
     };
 
-    await getUsableLand(payload);
-    setRunAlgoStatus("Run payload printed. Check browser console output.");
+    try {
+      const response = await getUsableLand(payload);
+      const nextRectangle = response.buildable_rectangle?.vertices ?? [];
+      const nextBoundary = response.shrunk_boundary ?? [];
+
+      setBuildableRectangleVertices(nextRectangle.length > 0 ? nextRectangle : null);
+      setShrunkBoundary(nextBoundary.length > 0 ? nextBoundary : null);
+
+      if (nextRectangle.length > 0 || nextBoundary.length > 0) {
+        setRunAlgoStatus(response.message || "Buildable space computed successfully.");
+      } else {
+        setRunAlgoStatus("Algorithm completed, but drawable geometry was not returned.");
+      }
+    } catch (error) {
+      const message = error instanceof Error ? error.message : "Unable to run algorithm.";
+      setBuildableRectangleVertices(null);
+      setShrunkBoundary(null);
+      setRunAlgoStatus(`Failed to run algorithm: ${message}`);
+    } finally {
+      setIsRunningAlgorithm(false);
+    }
   };
 
   const handleApplyArea = () => {
+    if (isRunningAlgorithm) return;
     if (!confirmedBasePoints) return;
     const targetAreaCm2 = parseAreaM2InputToCm2(targetAreaInput);
     if (targetAreaCm2 === null || targetAreaCm2 <= 0) {
@@ -191,6 +226,8 @@ const InputPlan: React.FC = () => {
               editable={!isConfirmed}
               roadMode={roadMode}
               placedRoad={placedRoads[0] ?? null}
+              buildableRectangle={buildableRectangleVertices}
+              shrunkBoundary={shrunkBoundary}
               onAddBorderLine={addBorderLine}
               onRemoveBorderLine={removeBorderLine}
               onPointsChange={setPoints}
@@ -208,14 +245,14 @@ const InputPlan: React.FC = () => {
             <div className="flex gap-2">
               <button
                 onClick={handleConfirmShape}
-                disabled={isConfirmed}
+                disabled={isConfirmed || isRunningAlgorithm}
                 className="px-3 py-2 bg-emerald-600 text-white text-sm rounded hover:bg-emerald-700 disabled:opacity-50 disabled:cursor-not-allowed"
               >
                 Confirm shape
               </button>
               <button
                 onClick={handleEditShape}
-                disabled={!isConfirmed}
+                disabled={!isConfirmed || isRunningAlgorithm}
                 className="px-3 py-2 bg-amber-500 text-white text-sm rounded hover:bg-amber-600 disabled:opacity-50 disabled:cursor-not-allowed"
               >
                 Edit
@@ -242,6 +279,7 @@ const InputPlan: React.FC = () => {
                     step="any"
                     value={targetAreaInput}
                     onChange={(e) => setTargetAreaInput(e.target.value)}
+                    disabled={isRunningAlgorithm}
                     className="rounded border border-gray-300 px-3 py-2 text-sm"
                     placeholder="e.g. 50"
                   />
@@ -251,6 +289,7 @@ const InputPlan: React.FC = () => {
                 
                 <button
                   onClick={handleApplyArea}
+                  disabled={isRunningAlgorithm}
                   className="px-3 py-2 bg-blue-600 text-white text-sm rounded hover:bg-blue-700 w-full"
                 >
                   Apply Area
@@ -259,7 +298,7 @@ const InputPlan: React.FC = () => {
                 <div className="rounded border border-slate-200 bg-slate-50 p-2 flex flex-col gap-2">
                   <button
                     onClick={handleRoadButtonClick}
-                    disabled={!isConfirmed || lastAppliedArea === null}
+                    disabled={!isConfirmed || lastAppliedArea === null || isRunningAlgorithm}
                     className="px-3 py-2 bg-slate-700 text-white text-sm rounded hover:bg-slate-800 disabled:opacity-50 disabled:cursor-not-allowed w-full"
                   >
                     {roadMode === "placing" ? "Cancel Road" : "Add Road"}
@@ -280,9 +319,10 @@ const InputPlan: React.FC = () => {
                   {placedRoads.length > 0 && (
                     <button
                       onClick={handleRunAlgorithm}
+                      disabled={isRunningAlgorithm}
                       className="px-3 py-2 bg-indigo-600 text-white text-sm rounded hover:bg-indigo-700 w-full"
                     >
-                      Run Algorithm
+                      {isRunningAlgorithm ? "Running..." : "Run Algorithm"}
                     </button>
                   )}
 
