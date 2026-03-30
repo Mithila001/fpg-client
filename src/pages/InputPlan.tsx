@@ -1,4 +1,5 @@
 import React, { useMemo, useState } from "react";
+import { useNavigate } from "react-router-dom";
 import InputPlanCanvas, { type RoomPoints, type CornerKey } from "../components/Konva/InputPlanCanvas";
 import {
   calculatePolygonArea,
@@ -61,6 +62,15 @@ const InputPlan: React.FC = () => {
   const [isRunningAlgorithm, setIsRunningAlgorithm] = useState(false);
   const [buildableRectangleVertices, setBuildableRectangleVertices] = useState<UsableLandPoint[] | null>(null);
   const [shrunkBoundary, setShrunkBoundary] = useState<UsableLandPoint[] | null>(null);
+  const [buildableRectangleSize, setBuildableRectangleSize] = useState<{ width: number; height: number } | null>(null);
+  const navigate = useNavigate();
+
+  const clearAlgorithmResultState = () => {
+    setBuildableRectangleVertices(null);
+    setShrunkBoundary(null);
+    setBuildableRectangleSize(null);
+    setRunAlgoStatus(null);
+  };
 
   const currentArea = useMemo(() => {
     return calculatePolygonArea(points, KEYS.slice(0, borderCount));
@@ -105,9 +115,7 @@ const InputPlan: React.FC = () => {
     setScaleError(null);
     setRoadMode("idle");
     setPlacedRoads([]);
-    setRunAlgoStatus(null);
-    setBuildableRectangleVertices(null);
-    setShrunkBoundary(null);
+    clearAlgorithmResultState();
   };
 
   const handleRoadButtonClick = () => {
@@ -120,7 +128,7 @@ const InputPlan: React.FC = () => {
     // Keep single-road UX for now while preserving array-compatible storage.
     setPlacedRoads([placement]);
     setRoadMode("idle");
-    setRunAlgoStatus(null);
+    clearAlgorithmResultState();
   };
 
   const handleRoadCancel = () => {
@@ -167,9 +175,16 @@ const InputPlan: React.FC = () => {
       const response = await getUsableLand(payload);
       const nextRectangle = response.buildable_rectangle?.vertices ?? [];
       const nextBoundary = response.shrunk_boundary ?? [];
+      const nextRectangleWidth = response.buildable_rectangle?.width ?? null;
+      const nextRectangleHeight = response.buildable_rectangle?.height ?? null;
 
       setBuildableRectangleVertices(nextRectangle.length > 0 ? nextRectangle : null);
       setShrunkBoundary(nextBoundary.length > 0 ? nextBoundary : null);
+      setBuildableRectangleSize(
+        nextRectangleWidth !== null && nextRectangleHeight !== null
+          ? { width: nextRectangleWidth, height: nextRectangleHeight }
+          : null,
+      );
 
       if (nextRectangle.length > 0 || nextBoundary.length > 0) {
         setRunAlgoStatus(response.message || "Buildable space computed successfully.");
@@ -180,6 +195,7 @@ const InputPlan: React.FC = () => {
       const message = error instanceof Error ? error.message : "Unable to run algorithm.";
       setBuildableRectangleVertices(null);
       setShrunkBoundary(null);
+      setBuildableRectangleSize(null);
       setRunAlgoStatus(`Failed to run algorithm: ${message}`);
     } finally {
       setIsRunningAlgorithm(false);
@@ -209,9 +225,23 @@ const InputPlan: React.FC = () => {
     // Basic validity bounds could be checking if vertices are too extreme, but zooming allows moving around.
     // For now we assume if it's convex base, scaling is convex.
     
+    clearAlgorithmResultState();
     setPoints(scaledPoints);
     setLastAppliedArea(targetAreaCm2);
     setScaleError(null);
+  };
+
+  const handleContinueToConfigureRooms = () => {
+    if (!buildableRectangleSize) return;
+
+    navigate("/configure-rooms", {
+      state: {
+        maxUsableWidth: buildableRectangleSize.width,
+        maxUsableHeight: buildableRectangleSize.height,
+        buildableRectangleVertices,
+        shrunkBoundary,
+      },
+    });
   };
 
   return (
@@ -328,6 +358,16 @@ const InputPlan: React.FC = () => {
 
                   {runAlgoStatus && (
                     <div className="text-[11px] text-indigo-700">{runAlgoStatus}</div>
+                  )}
+
+                  {buildableRectangleSize && (
+                    <button
+                      onClick={handleContinueToConfigureRooms}
+                      disabled={isRunningAlgorithm}
+                      className="px-3 py-2 bg-emerald-600 text-white text-sm rounded hover:bg-emerald-700 w-full disabled:opacity-50 disabled:cursor-not-allowed"
+                    >
+                      Continue to Configure Rooms
+                    </button>
                   )}
                 </div>
 
