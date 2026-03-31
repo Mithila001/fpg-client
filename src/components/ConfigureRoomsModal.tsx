@@ -179,7 +179,7 @@ const ConfigureRoomsModal: React.FC<ConfigureRoomsModalProps> = ({
         data: roomData,
       },
       should_optuna_run: true,
-      optuna_trial_count: 20,
+      optuna_trial_count: 10,
     };
 
     onSubmit({
