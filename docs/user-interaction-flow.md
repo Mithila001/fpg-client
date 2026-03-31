@@ -50,9 +50,14 @@ This file documents the user workflow in the `Caves` page and related canvas com
   - zoom/pan state, wheel-based zoom and pan, reset via ref,
   - supports either segment paths or explicit point list as input.
 
+- `config/canvasScaling.ts`: centralized source of scaling and unit-related canvas factors.
+  - contains px-per-cm, wall thickness, zoom bounds/step, fit padding, viewport minimums,
+  - contains Step A road sizing/snap constants,
+  - contains grid density factors and opening symbol sizing values.
+
 ### Metadata
 
-- Last updated: 2026-03-30
+- Last updated: 2026-03-31
 - Maintainer note: If the source code for `Caves.tsx`, `process/UnifiedProcessCanvas.tsx`, `process/StepAEditLayer.tsx`, `process/StepBFloorPlanLayer.tsx`, `InputPlanCanvas.tsx`, or `KonvaCanvas.tsx` changes, update this section to reflect:
   1. Changed component responsibilities.
   2. Modified user action sequence.

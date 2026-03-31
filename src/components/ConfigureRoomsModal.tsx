@@ -1,7 +1,6 @@
 import React, { useEffect, useMemo, useState } from "react";
 import type { FormatV2Request } from "../api/floorPlanFormatApi";
 import {
-  formatLengthFromCm,
   unitConverter_systemCmToMetersDisplay,
   unitConverter_userInputMetersToSystemCm,
 } from "../utils/units";
@@ -269,8 +268,8 @@ const ConfigureRoomsModal: React.FC<ConfigureRoomsModalProps> = ({
               </label>
             </div>
             <div className="mt-3 text-xs text-slate-600">
-              Max usable size: {maxUsableWidth !== null ? formatLengthFromCm(maxUsableWidth, 2) : "N/A"} x{" "}
-              {maxUsableHeight !== null ? formatLengthFromCm(maxUsableHeight, 2) : "N/A"}
+              Max usable size: {maxUsableWidth !== null ? unitConverter_systemCmToMetersDisplay(maxUsableWidth, 2) : "N/A"} x{" "}
+              {maxUsableHeight !== null ? unitConverter_systemCmToMetersDisplay(maxUsableHeight, 2) : "N/A"}
             </div>
           </div>
 

@@ -2,6 +2,7 @@ import React from "react";
 import CoordinateCanvas from "../KonvaCanvas";
 import type { Coordinate, Label } from "../shapes/types";
 import type { CanvasOpening } from "../../../types";
+import { KONVA_SCALE } from "../config/canvasScaling";
 
 interface StepBFloorPlanLayerProps {
   segments: Coordinate[][] | null;
@@ -39,8 +40,8 @@ const StepBFloorPlanLayer: React.FC<StepBFloorPlanLayerProps> = ({
       segments={segments}
       labels={labels ?? undefined}
       openings={openings ?? undefined}
-      pxPerCm={1}
-      wallThickness={6}
+      pxPerCm={KONVA_SCALE.pxPerCm}
+      wallThickness={KONVA_SCALE.wallThicknessPx}
     />
   );
 };

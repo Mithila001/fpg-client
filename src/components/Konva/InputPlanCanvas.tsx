@@ -1,12 +1,13 @@
 import React, { useCallback, useEffect, useMemo, useRef, useState } from "react";
 import { Circle, Layer, Line, Stage, Text } from "react-konva";
 import Konva from "konva";
-import { formatLengthFromCm } from "../../utils/units";
+import { unitConverter_systemCmToMetersDisplay } from "../../utils/units";
 import {
   buildRoadPolygonFromPlacement,
   findNearestBoundarySegment,
   type RoadPlacement,
 } from "./utils/geometry";
+import { KONVA_VIEWPORT, KONVA_ZOOM, STEP_A_ROAD } from "./config/canvasScaling";
 
 export type CornerKey = "A" | "B" | "C" | "D" | "E" | "F";
 
@@ -33,17 +34,17 @@ interface InputPlanCanvasProps {
 }
 
 const ALL_KEYS: CornerKey[] = ["A", "B", "C", "D", "E", "F"];
-const PADDING = 24;
-const MIN_EDGE = 24;
-const DEFAULT_WIDTH = 900;
-const DEFAULT_HEIGHT = 620;
-const ROAD_WIDTH = 30;
-const ROAD_LENGTH = 1000;
-const ROAD_GAP = 6;
-const ROAD_SNAP_THRESHOLD = 36;
-const FIT_PADDING = 36;
-const MIN_VIEW_SCALE = 0.2;
-const MAX_VIEW_SCALE = 3;
+const PADDING = KONVA_VIEWPORT.pointPaddingPx;
+const MIN_EDGE = STEP_A_ROAD.minEdgeLength;
+const DEFAULT_WIDTH = KONVA_VIEWPORT.defaultWidthPx;
+const DEFAULT_HEIGHT = KONVA_VIEWPORT.defaultHeightPx;
+const ROAD_WIDTH = STEP_A_ROAD.width;
+const ROAD_LENGTH = STEP_A_ROAD.length;
+const ROAD_GAP = STEP_A_ROAD.gap;
+const ROAD_SNAP_THRESHOLD = STEP_A_ROAD.snapThreshold;
+const FIT_PADDING = KONVA_VIEWPORT.fitPaddingPx;
+const MIN_VIEW_SCALE = KONVA_ZOOM.minScale;
+const MAX_VIEW_SCALE = KONVA_ZOOM.maxScale;
 
 const distance = (a: RoomPoint, b: RoomPoint): number => {
   const dx = b.x - a.x;
@@ -132,7 +133,10 @@ const InputPlanCanvas: React.FC<InputPlanCanvasProps> = ({
   const stageRef = useRef<Konva.Stage>(null);
   const [active, setActive] = useState<CornerKey | null>(null);
   const [previewRoad, setPreviewRoad] = useState<RoadPlacement | null>(null);
-  const [dimensions, setDimensions] = useState({ width: DEFAULT_WIDTH, height: DEFAULT_HEIGHT });
+  const [dimensions, setDimensions] = useState<{ width: number; height: number }>({
+    width: DEFAULT_WIDTH,
+    height: DEFAULT_HEIGHT,
+  });
   const [stageScale, setStageScale] = useState(1);
   const [stageX, setStageX] = useState(0);
   const [stageY, setStageY] = useState(0);
@@ -151,8 +155,8 @@ const InputPlanCanvas: React.FC<InputPlanCanvasProps> = ({
     const observer = new ResizeObserver((entries) => {
       const entry = entries[0];
       if (!entry) return;
-      const width = Math.max(320, Math.floor(entry.contentRect.width));
-      const height = Math.max(320, Math.floor(entry.contentRect.height));
+      const width = Math.max(KONVA_VIEWPORT.minContainerSizePx, Math.floor(entry.contentRect.width));
+      const height = Math.max(KONVA_VIEWPORT.minContainerSizePx, Math.floor(entry.contentRect.height));
       setDimensions({ width, height });
     });
 
@@ -397,8 +401,8 @@ const InputPlanCanvas: React.FC<InputPlanCanvasProps> = ({
     setStageY(nextY);
   };
 
-  const handleZoomIn = () => zoomFromViewportCenter(0.2);
-  const handleZoomOut = () => zoomFromViewportCenter(-0.2);
+  const handleZoomIn = () => zoomFromViewportCenter(KONVA_ZOOM.buttonStep);
+  const handleZoomOut = () => zoomFromViewportCenter(-KONVA_ZOOM.buttonStep);
   const handleResetZoom = () => fitToGeometry();
 
   return (
@@ -498,7 +502,7 @@ const InputPlanCanvas: React.FC<InputPlanCanvasProps> = ({
             x={16}
             y={12}
             text={orderedKeys
-              .map((key) => `${key}: ${formatLengthFromCm(wallLengths[key] ?? 0, 2)}`)
+              .map((key) => `${key}: ${unitConverter_systemCmToMetersDisplay(wallLengths[key] ?? 0, 2)}`)
               .join(" | ")}
             fontSize={13}
             fill="#334155"

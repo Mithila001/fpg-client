@@ -1,6 +1,7 @@
 import React from "react";
 import { Line } from "react-konva";
 import type { CanvasOpening } from "../../../types";
+import { OPENING_STYLE } from "../config/canvasScaling";
 
 interface OpeningsProps {
   openings: CanvasOpening[];
@@ -29,7 +30,7 @@ const getArcPoints = (
   const vy = endY - startY;
   const points: number[] = [];
 
-  const steps = 14;
+  const steps = OPENING_STYLE.arcSteps;
   for (let i = 0; i <= steps; i += 1) {
     const t = (Math.PI / 2) * (i / steps) * sweepDirection;
     const rotated = rotate(vx, vy, t);
@@ -59,7 +60,7 @@ const Openings: React.FC<OpeningsProps> = ({ openings, pxPerCm, offsetX, offsetY
         const ny = dx / len;
 
         if (opening.kind === "window") {
-          const gap = 3;
+          const gap = OPENING_STYLE.windowGapPx;
           return (
             <React.Fragment key={`opening-${idx}`}>
               <Line points={[x1, y1, x2, y2]} stroke="#0f766e" strokeWidth={3} lineCap="round" />

@@ -5,6 +5,7 @@ import { Grid, Wall, Labels, Openings } from "./shapes";
 import type { Coordinate, Label } from "./shapes";
 import { cmToPx } from "../../utils/units";
 import type { CanvasOpening } from "../../types";
+import { KONVA_GRID, KONVA_SCALE, KONVA_VIEWPORT, KONVA_ZOOM } from "./config/canvasScaling";
 
 interface CoordinateCanvasProps {
   // optional collection of wall segments (each segment is a polyline)
@@ -27,7 +28,7 @@ export interface CoordinateCanvasHandle {
 
 const CoordinateCanvas = forwardRef<CoordinateCanvasHandle, CoordinateCanvasProps>(
   ({ segments, points, labels, openings, pxPerCm, wallThickness }, ref) => {
-    const scale = pxPerCm ?? 1;
+    const scale = pxPerCm ?? KONVA_SCALE.pxPerCm;
 
     // determine which geometry to render (flatten segments for debugging)
     let effectivePoints: Coordinate[] = [];
@@ -38,7 +39,7 @@ const CoordinateCanvas = forwardRef<CoordinateCanvasHandle, CoordinateCanvasProp
     }
 
     // compute offset so the minimum coordinate isn't at the very edge
-    const margin = 100;
+    const margin = KONVA_VIEWPORT.contentMarginPx;
     let offsetX = 0;
     let offsetY = 0;
     if (effectivePoints.length > 0) {
@@ -74,7 +75,7 @@ const CoordinateCanvas = forwardRef<CoordinateCanvasHandle, CoordinateCanvasProp
     const [stageY, setStageY] = useState(0);
 
   // grid configuration
-  const baseGridSize = cmToPx(10, scale);
+  const baseGridSize = cmToPx(KONVA_GRID.baseStepCm, scale);
 
   // start with a simple scale-based grid size, but if we have geometry
   // compute a "dynamic" grid spacing so the number of cells between the
@@ -82,7 +83,7 @@ const CoordinateCanvas = forwardRef<CoordinateCanvasHandle, CoordinateCanvasProp
   // raw coordinate values.  This keeps a small floor plan from being
   // overwhelmed by a huge grid and a large plan from having only a handful of
   // lines.
-  let gridSize = baseGridSize * scale; // fallback value
+  let gridSize = baseGridSize; // fallback value
   if (effectivePoints.length > 0) {
     const maxX = Math.max(...effectivePoints.map((p) => p.x));
     const maxY = Math.max(...effectivePoints.map((p) => p.y));
@@ -94,12 +95,12 @@ const CoordinateCanvas = forwardRef<CoordinateCanvasHandle, CoordinateCanvasProp
     const maxRange = Math.max(rangeX, rangeY);
 
     // how many grid cells do we want along the longest dimension?
-    const targetCells = 20;
+    const targetCells = KONVA_GRID.targetCells;
     const dynamicSize = maxRange / targetCells;
 
     // clamp so that the grid never becomes absurdly tiny or huge
-    const minSize = baseGridSize * scale * 0.05;
-    const maxSize = baseGridSize * scale * 5;
+    const minSize = baseGridSize * KONVA_GRID.minScaleFactor;
+    const maxSize = baseGridSize * KONVA_GRID.maxScaleFactor;
     gridSize = Math.min(maxSize, Math.max(minSize, dynamicSize));
   }
 
@@ -113,9 +114,12 @@ const CoordinateCanvas = forwardRef<CoordinateCanvasHandle, CoordinateCanvasProp
     const pointerPos = stage.getPointerPosition();
     if (!pointerPos) return;
 
-    const zoomSpeed = 0.1;
+    const zoomSpeed = KONVA_ZOOM.wheelStep;
     const direction = e.evt.deltaY > 0 ? -1 : 1;
-    const newScale = Math.min(3, Math.max(0.5, oldScale + direction * zoomSpeed));
+    const newScale = Math.min(
+      KONVA_ZOOM.maxScale,
+      Math.max(KONVA_ZOOM.minScale, oldScale + direction * zoomSpeed),
+    );
 
     // zoom centered on cursor
     const newX = pointerPos.x - (pointerPos.x - stageX) * (newScale / oldScale);
@@ -140,20 +144,6 @@ const CoordinateCanvas = forwardRef<CoordinateCanvasHandle, CoordinateCanvasProp
     },
   }));
 
-  // debug: log whenever dimensions state changes
-  useEffect(() => {
-    if (dimensions.width > 0 && dimensions.height > 0) {
-      console.log(
-        "Dimensions state updated:",
-        Math.round(dimensions.width),
-        "x",
-        Math.round(dimensions.height),
-        "scale:",
-        scale,
-      );
-    }
-  }, [dimensions, scale]);
-
   // watch the container's size and update dimensions for Konva
   useEffect(() => {
     const observeTarget = containerRef.current;
@@ -162,8 +152,10 @@ const CoordinateCanvas = forwardRef<CoordinateCanvasHandle, CoordinateCanvasProp
     const resizeObserver = new ResizeObserver((entries) => {
       for (const entry of entries) {
         const { width, height } = entry.contentRect;
-        setDimensions({ width, height });
-        console.log("CoordinateCanvas resized:", Math.round(width), "x", Math.round(height));
+        setDimensions({
+          width: Math.max(KONVA_VIEWPORT.minContainerSizePx, width),
+          height: Math.max(KONVA_VIEWPORT.minContainerSizePx, height),
+        });
       }
     });
 
@@ -212,11 +204,11 @@ const CoordinateCanvas = forwardRef<CoordinateCanvasHandle, CoordinateCanvasProp
                     x: cmToPx(p.x, scale) + offsetX,
                     y: cmToPx(p.y, scale) + offsetY,
                   }))}
-                  thickness={wallThickness ?? 6}
+                  thickness={wallThickness ?? KONVA_SCALE.wallThicknessPx}
                 />
               ))
             ) : (
-              <Wall points={scaledPoints} thickness={wallThickness ?? 6} />
+              <Wall points={scaledPoints} thickness={wallThickness ?? KONVA_SCALE.wallThicknessPx} />
             )}
 
             {/* custom text labels */}

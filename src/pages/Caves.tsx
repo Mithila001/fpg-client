@@ -1,6 +1,6 @@
 import React, { useMemo, useState } from "react";
 import UnifiedProcessCanvas from "../components/Konva/process/UnifiedProcessCanvas";
-import type { RoomPoints, CornerKey } from "../components/Konva/InputPlanCanvas";
+import type { RoomPoints } from "../components/Konva/InputPlanCanvas";
 import {
   calculatePolygonArea,
   calculatePolygonCentroid,
@@ -11,7 +11,6 @@ import {
   getUsableLand,
   type UsableLandPayload,
   type UsableLandPoint,
-  type UsableLandRoadConnectedSegment,
 } from "../api/usableLandApi";
 import {
   compactRoomsToLabels,
@@ -23,47 +22,30 @@ import {
 import type { Coordinate, Label } from "../components/Konva/shapes/types";
 import type { CanvasOpening } from "../types";
 import {
-  formatAreaFromCm2,
-  formatLengthFromCm,
+  unitConverter_systemCm2ToSqMetersDisplay,
+  unitConverter_systemCmToMetersDisplay,
   unitConverter_updateLabelMeters,
   unitConverter_systemDimensionsCmToMetersDisplay,
   unitConverter_userInputSqMetersToSystemCm2,
 } from "../utils/units";
+import {
+  CAVES_BORDER_LIMITS,
+  CAVES_BUILDABLE_MIN_SIZE_CM,
+  CAVES_INITIAL_POINTS,
+  CAVES_KEYS,
+} from "./cavesProcess/constants";
+import {
+  buildClosedLoopCoordinates,
+  buildRoadConnectedSegments,
+  edgeDistance,
+} from "./cavesProcess/helpers";
 import ConfigureRoomsModal, {
   type SubmittedRoomRequirements,
 } from "../components/ConfigureRoomsModal";
 
-const KEYS: CornerKey[] = ["A", "B", "C", "D", "E", "F"];
-const MIN_BORDERS = 4;
-const MAX_BORDERS = 6;
-
-const distance = (a: { x: number; y: number }, b: { x: number; y: number }): number => {
-  const dx = b.x - a.x;
-  const dy = b.y - a.y;
-  return Math.sqrt(dx * dx + dy * dy);
-};
-
-const buildClosedLoopCoordinates = (
-  points: RoomPoints,
-  orderedKeys: CornerKey[],
-): Array<{ x: number; y: number }> => {
-  const loop = orderedKeys.map((key) => ({ x: points[key].x, y: points[key].y }));
-  if (loop.length > 0) {
-    loop.push({ ...loop[0] });
-  }
-  return loop;
-};
-
 const Caves: React.FC = () => {
-  const [points, setPoints] = useState<RoomPoints>({
-    A: { x: 140, y: 140 },
-    B: { x: 460, y: 140 },
-    C: { x: 460, y: 380 },
-    D: { x: 140, y: 380 },
-    E: { x: 300, y: 500 },
-    F: { x: 520, y: 300 },
-  });
-  const [borderCount, setBorderCount] = useState(4);
+  const [points, setPoints] = useState<RoomPoints>(CAVES_INITIAL_POINTS);
+  const [borderCount, setBorderCount] = useState<number>(CAVES_BORDER_LIMITS.min);
   const [isConfirmed, setIsConfirmed] = useState(false);
   const [confirmedBasePoints, setConfirmedBasePoints] = useState<RoomPoints | null>(null);
   const [targetAreaInput, setTargetAreaInput] = useState<string>("");
@@ -89,7 +71,7 @@ const Caves: React.FC = () => {
   const [floorPlanError, setFloorPlanError] = useState<string | null>(null);
   const [showFloorPlanView, setShowFloorPlanView] = useState(false);
 
-  const orderedKeys = useMemo(() => KEYS.slice(0, borderCount), [borderCount]);
+  const orderedKeys = useMemo(() => CAVES_KEYS.slice(0, borderCount), [borderCount]);
 
   const currentArea = useMemo(() => {
     return calculatePolygonArea(points, orderedKeys);
@@ -99,7 +81,7 @@ const Caves: React.FC = () => {
     return orderedKeys
       .map((key, idx) => {
         const next = orderedKeys[(idx + 1) % orderedKeys.length];
-        const len = distance(points[key], points[next]);
+        const len = edgeDistance(points[key], points[next]);
         return unitConverter_updateLabelMeters(`${key}->${next}`, len, 2);
       })
       .join(" | ");
@@ -131,15 +113,15 @@ const Caves: React.FC = () => {
   };
 
   const addBorderLine = () => {
-    if (isConfirmed || borderCount >= MAX_BORDERS) return;
-    setBorderCount((prev) => Math.min(MAX_BORDERS, prev + 1));
+    if (isConfirmed || borderCount >= CAVES_BORDER_LIMITS.max) return;
+    setBorderCount((prev) => Math.min(CAVES_BORDER_LIMITS.max, prev + 1));
     clearAlgorithmResultState();
     invalidateFloorPlanFromStepA();
   };
 
   const removeBorderLine = () => {
-    if (isConfirmed || borderCount <= MIN_BORDERS) return;
-    setBorderCount((prev) => Math.max(MIN_BORDERS, prev - 1));
+    if (isConfirmed || borderCount <= CAVES_BORDER_LIMITS.min) return;
+    setBorderCount((prev) => Math.max(CAVES_BORDER_LIMITS.min, prev - 1));
     clearAlgorithmResultState();
     invalidateFloorPlanFromStepA();
   };
@@ -224,28 +206,14 @@ const Caves: React.FC = () => {
 
     const area = calculatePolygonArea(points, orderedKeys);
 
-    const roadConnected: UsableLandRoadConnectedSegment[] = placedRoads
-      .map((road) => {
-        const startKey = orderedKeys[road.segmentIndex];
-        const endKey = orderedKeys[(road.segmentIndex + 1) % orderedKeys.length];
-        if (!startKey || !endKey) return null;
-
-        return {
-          segment: [
-            { x: points[startKey].x, y: points[startKey].y },
-            { x: points[endKey].x, y: points[endKey].y },
-          ],
-          roadType: "mainRoad",
-        };
-      })
-      .filter((item): item is UsableLandRoadConnectedSegment => item !== null);
+    const roadConnected = buildRoadConnectedSegments(points, orderedKeys, placedRoads);
 
     const payload: UsableLandPayload = {
       area,
       segmentsCoordinates: buildClosedLoopCoordinates(points, orderedKeys),
       roadConnected,
-      min_width: 100,
-      min_height: 100,
+      min_width: CAVES_BUILDABLE_MIN_SIZE_CM.width,
+      min_height: CAVES_BUILDABLE_MIN_SIZE_CM.height,
       should_plot: true,
     };
 
@@ -390,7 +358,7 @@ const Caves: React.FC = () => {
               ) : (
                 <div className="flex flex-col gap-3">
                   <div className="text-xs text-slate-600">
-                    Current Area: <span className="font-semibold">{formatAreaFromCm2(currentArea, 2)}</span>
+                    Current Area: <span className="font-semibold">{unitConverter_systemCm2ToSqMetersDisplay(currentArea, 2)}</span>
                   </div>
 
                   <label className="flex flex-col gap-1 text-xs text-slate-700">
@@ -451,8 +419,8 @@ const Caves: React.FC = () => {
 
                   {buildableRectangleSize && (
                     <div className="rounded border border-emerald-200 bg-emerald-50 p-2 text-xs text-emerald-800">
-                      Usable rectangle: {formatLengthFromCm(buildableRectangleSize.width, 2)} x{" "}
-                      {formatLengthFromCm(buildableRectangleSize.height, 2)}
+                      Usable rectangle: {unitConverter_systemCmToMetersDisplay(buildableRectangleSize.width, 2)} x{" "}
+                      {unitConverter_systemCmToMetersDisplay(buildableRectangleSize.height, 2)}
                     </div>
                   )}
                 </div>

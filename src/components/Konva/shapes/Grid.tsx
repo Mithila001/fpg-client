@@ -1,6 +1,6 @@
 import React from "react";
 import { Line, Text } from "react-konva";
-import { formatLengthFromCm, pxToCm } from "../../../utils/units";
+import { pxToCm, unitConverter_systemCmToMetersDisplay } from "../../../utils/units";
 
 interface GridProps {
   dimensions: { width: number; height: number };
@@ -19,7 +19,7 @@ const Grid: React.FC<GridProps> = ({ dimensions, gridSize, pxPerCm }) => {
         key={`lx${x}`}
         x={x + 2}
         y={2}
-        text={formatLengthFromCm(pxToCm(x, pxPerCm), 1)}
+        text={unitConverter_systemCmToMetersDisplay(pxToCm(x, pxPerCm), 1)}
         fontSize={10}
         fill="#999"
       />,
@@ -34,7 +34,7 @@ const Grid: React.FC<GridProps> = ({ dimensions, gridSize, pxPerCm }) => {
         key={`ly${y}`}
         x={2}
         y={y + 2}
-        text={formatLengthFromCm(pxToCm(y, pxPerCm), 1)}
+        text={unitConverter_systemCmToMetersDisplay(pxToCm(y, pxPerCm), 1)}
         fontSize={10}
         fill="#999"
       />,
