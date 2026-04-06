@@ -1,10 +1,10 @@
 import React, { useState, useEffect, useRef, forwardRef, useImperativeHandle } from "react";
 import { Stage, Layer, Circle, Text, Rect } from "react-konva";
 import Konva from "konva";
-import { Grid, Wall, Labels, Openings } from "./shapes";
+import { Grid, Wall, Labels, Openings, Veranda } from "./shapes";
 import type { Coordinate, Label } from "./shapes";
 import { cmToPx } from "../../utils/units";
-import type { CanvasOpening } from "../../types";
+import type { CanvasOpening, CanvasVeranda } from "../../types";
 import { KONVA_GRID, KONVA_SCALE, KONVA_VIEWPORT, KONVA_ZOOM } from "./config/canvasScaling";
 
 interface CoordinateCanvasProps {
@@ -16,6 +16,8 @@ interface CoordinateCanvasProps {
   labels?: Label[];
   // openings to draw on top of walls
   openings?: CanvasOpening[];
+  // optional veranda metadata overlay
+  veranda?: CanvasVeranda;
   // pixels-per-centimeter scale for converting internal cm coordinates to canvas px
   pxPerCm?: number;
   // wall thickness in pixels
@@ -27,7 +29,7 @@ export interface CoordinateCanvasHandle {
 }
 
 const CoordinateCanvas = forwardRef<CoordinateCanvasHandle, CoordinateCanvasProps>(
-  ({ segments, points, labels, openings, pxPerCm, wallThickness }, ref) => {
+  ({ segments, points, labels, openings, veranda, pxPerCm, wallThickness }, ref) => {
     const scale = pxPerCm ?? KONVA_SCALE.pxPerCm;
 
     // determine which geometry to render (flatten segments for debugging)
@@ -217,6 +219,10 @@ const CoordinateCanvas = forwardRef<CoordinateCanvasHandle, CoordinateCanvasProp
             {/* openings rendered as architectural symbols */}
             {openings && openings.length > 0 && (
               <Openings openings={openings} pxPerCm={scale} offsetX={offsetX} offsetY={offsetY} />
+            )}
+
+            {veranda && (
+              <Veranda veranda={veranda} pxPerCm={scale} offsetX={offsetX} offsetY={offsetY} />
             )}
 
             {/* point markers / labels (keep for debugging) */}

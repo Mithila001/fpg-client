@@ -34,9 +34,21 @@ export interface CompactRoom {
 
 export type CompactByRoom = Record<string, CompactRoom>;
 
+export interface VerandaMetadata {
+  room_name: string;
+  l_veranda_pillar: Point;
+  r_veranda_pillar: Point;
+  veranda_back_points: Point[];
+}
+
+export interface FormatMetadata {
+  veranda?: VerandaMetadata;
+}
+
 export interface FormatResponse {
   status: PlanStatus;
   message: string;
   walls: Wall[];
   compact_by_room?: CompactByRoom;
+  metadata?: FormatMetadata;
 }

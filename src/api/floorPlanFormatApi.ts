@@ -4,11 +4,14 @@ import { apiRawToCm } from "../utils/units";
 import type {
   CompactByRoom,
   CompactOpening,
+  FormatMetadata,
   FormatResponse,
   Point,
   Wall,
   CanvasOpening,
+  CanvasVeranda,
   OpeningKind,
+  VerandaMetadata,
 } from "../types";
 import { getRoomCenterFromWalls } from "../utils/roomGeometry";
 
@@ -26,6 +29,31 @@ const normalizeOpeningToCm = (opening: CompactOpening): CompactOpening => ({
   x2: apiRawToCm(opening.x2),
   y2: apiRawToCm(opening.y2),
 });
+
+const normalizePointToCm = (point: Point): Point => ({
+  x: apiRawToCm(point.x),
+  y: apiRawToCm(point.y),
+});
+
+const normalizeVerandaToCm = (veranda?: VerandaMetadata): VerandaMetadata | undefined => {
+  if (!veranda) return undefined;
+
+  return {
+    ...veranda,
+    l_veranda_pillar: normalizePointToCm(veranda.l_veranda_pillar),
+    r_veranda_pillar: normalizePointToCm(veranda.r_veranda_pillar),
+    veranda_back_points: (veranda.veranda_back_points ?? []).map(normalizePointToCm),
+  };
+};
+
+const normalizeMetadataToCm = (metadata?: FormatMetadata): FormatMetadata | undefined => {
+  if (!metadata) return undefined;
+
+  return {
+    ...metadata,
+    veranda: normalizeVerandaToCm(metadata.veranda),
+  };
+};
 
 const normalizeCompactByRoomToCm = (compactByRoom?: CompactByRoom): CompactByRoom | undefined => {
   if (!compactByRoom) return undefined;
@@ -59,6 +87,7 @@ export function normalizeApiResponseToCm(resp: FormatResponse): FormatResponse {
     ...resp,
     walls: (resp.walls ?? []).map(normalizeWallToCm),
     compact_by_room: normalizeCompactByRoomToCm(resp.compact_by_room),
+    metadata: normalizeMetadataToCm(resp.metadata),
   };
 }
 
@@ -148,6 +177,18 @@ export function compactRoomsToOpenings(resp: FormatResponse): CanvasOpening[] {
   }
 
   return openings;
+}
+
+export function verandaFromMetadata(resp: FormatResponse): CanvasVeranda | null {
+  const veranda = resp.metadata?.veranda;
+  if (!veranda) return null;
+
+  return {
+    roomName: veranda.room_name,
+    leftPillar: veranda.l_veranda_pillar,
+    rightPillar: veranda.r_veranda_pillar,
+    backPoints: veranda.veranda_back_points ?? [],
+  };
 }
 
 export type { FormatResponse } from "../types";

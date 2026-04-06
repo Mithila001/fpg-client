@@ -1,5 +1,6 @@
 import axios from "axios";
 import client from "./client";
+import { m2ToCm2, mToCm } from "../utils/units";
 
 export interface UsableLandPoint {
   x: number;
@@ -50,6 +51,32 @@ export interface UsableLandResponse {
   metadata?: UsableLandResponseMetadata;
 }
 
+const normalizePointToCm = (point: UsableLandPoint): UsableLandPoint => ({
+  x: mToCm(point.x),
+  y: mToCm(point.y),
+});
+
+const normalizeBuildableRectangleToCm = (
+  rectangle?: BuildableRectangle,
+): BuildableRectangle | undefined => {
+  if (!rectangle) return undefined;
+
+  return {
+    ...rectangle,
+    vertices: (rectangle.vertices ?? []).map(normalizePointToCm),
+    width: mToCm(rectangle.width),
+    height: mToCm(rectangle.height),
+    area: m2ToCm2(rectangle.area),
+  };
+};
+
+// Backend returns Step A values in meters; normalize to internal centimeters.
+const normalizeUsableLandResponseToCm = (response: UsableLandResponse): UsableLandResponse => ({
+  ...response,
+  buildable_rectangle: normalizeBuildableRectangleToCm(response.buildable_rectangle),
+  shrunk_boundary: (response.shrunk_boundary ?? []).map(normalizePointToCm),
+});
+
 const getApiErrorMessage = (error: unknown): string => {
   if (axios.isAxiosError<{ message?: string }>(error)) {
     return error.response?.data?.message ?? error.message;
@@ -65,7 +92,7 @@ const getApiErrorMessage = (error: unknown): string => {
 export async function getUsableLand(payload: UsableLandPayload): Promise<UsableLandResponse> {
   try {
     const response = await client.post<UsableLandResponse>("/algorithms/buildable-space", payload);
-    return response.data;
+    return normalizeUsableLandResponseToCm(response.data);
   } catch (error) {
     throw new Error(getApiErrorMessage(error));
   }

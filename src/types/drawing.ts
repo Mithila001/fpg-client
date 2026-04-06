@@ -13,3 +13,10 @@ export interface CanvasOpening {
   connectedRoomName: string | null;
   connectedRoomType: string | null;
 }
+
+export interface CanvasVeranda {
+  roomName: string;
+  leftPillar: { x: number; y: number };
+  rightPillar: { x: number; y: number };
+  backPoints: Array<{ x: number; y: number }>;
+}

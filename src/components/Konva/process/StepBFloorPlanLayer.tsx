@@ -1,13 +1,14 @@
 import React from "react";
 import CoordinateCanvas from "../KonvaCanvas";
 import type { Coordinate, Label } from "../shapes/types";
-import type { CanvasOpening } from "../../../types";
+import type { CanvasOpening, CanvasVeranda } from "../../../types";
 import { KONVA_SCALE } from "../config/canvasScaling";
 
 interface StepBFloorPlanLayerProps {
   segments: Coordinate[][] | null;
   labels: Label[] | null;
   openings: CanvasOpening[] | null;
+  veranda: CanvasVeranda | null;
   isLoading: boolean;
   status: string | null;
 }
@@ -16,6 +17,7 @@ const StepBFloorPlanLayer: React.FC<StepBFloorPlanLayerProps> = ({
   segments,
   labels,
   openings,
+  veranda,
   isLoading,
   status,
 }) => {
@@ -40,6 +42,7 @@ const StepBFloorPlanLayer: React.FC<StepBFloorPlanLayerProps> = ({
       segments={segments}
       labels={labels ?? undefined}
       openings={openings ?? undefined}
+      veranda={veranda ?? undefined}
       pxPerCm={KONVA_SCALE.pxPerCm}
       wallThickness={KONVA_SCALE.wallThicknessPx}
     />

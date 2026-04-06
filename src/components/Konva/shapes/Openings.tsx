@@ -1,7 +1,7 @@
 import React from "react";
 import { Line } from "react-konva";
 import type { CanvasOpening } from "../../../types";
-import { OPENING_STYLE } from "../config/canvasScaling";
+import { OPENING_COLORS, OPENING_STYLE } from "../config/canvasScaling";
 
 interface OpeningsProps {
   openings: CanvasOpening[];
@@ -40,6 +40,10 @@ const getArcPoints = (
   return points;
 };
 
+const getDoorPalette = (opening: CanvasOpening) => {
+  return opening.openingType === "casedDoor" ? OPENING_COLORS.casedDoor : OPENING_COLORS.door;
+};
+
 const Openings: React.FC<OpeningsProps> = ({ openings, pxPerCm, offsetX, offsetY }) => {
   return (
     <>
@@ -63,22 +67,29 @@ const Openings: React.FC<OpeningsProps> = ({ openings, pxPerCm, offsetX, offsetY
           const gap = OPENING_STYLE.windowGapPx;
           return (
             <React.Fragment key={`opening-${idx}`}>
-              <Line points={[x1, y1, x2, y2]} stroke="#0f766e" strokeWidth={3} lineCap="round" />
+              <Line
+                points={[x1, y1, x2, y2]}
+                stroke={OPENING_COLORS.window.center}
+                strokeWidth={3}
+                lineCap="round"
+              />
               <Line
                 points={[x1 + nx * gap, y1 + ny * gap, x2 + nx * gap, y2 + ny * gap]}
-                stroke="#2dd4bf"
+                stroke={OPENING_COLORS.window.sideA}
                 strokeWidth={5}
                 lineCap="round"
               />
               <Line
                 points={[x1 - nx * gap, y1 - ny * gap, x2 - nx * gap, y2 - ny * gap]}
-                stroke="#22d3ee"
+                stroke={OPENING_COLORS.window.sideB}
                 strokeWidth={5}
                 lineCap="round"
               />
             </React.Fragment>
           );
         }
+
+        const doorPalette = getDoorPalette(opening);
 
         const sweepDirection: 1 | -1 = opening.side === "west" || opening.side === "south" ? -1 : 1;
         const arcPoints = getArcPoints(x1, y1, x2, y2, sweepDirection);
@@ -90,9 +101,20 @@ const Openings: React.FC<OpeningsProps> = ({ openings, pxPerCm, offsetX, offsetY
 
         return (
           <React.Fragment key={`opening-${idx}`}>
-            <Line points={[x1, y1, x2, y2]} stroke="#92400e" strokeWidth={2} lineCap="round" />
-            <Line points={[x1, y1, leafX, leafY]} stroke="#b45309" strokeWidth={1.5} lineCap="round" />
-            <Line points={arcPoints} stroke="#b45309" strokeWidth={1.5} lineCap="round" lineJoin="round" />
+            <Line points={[x1, y1, x2, y2]} stroke={doorPalette.base} strokeWidth={2} lineCap="round" />
+            <Line
+              points={[x1, y1, leafX, leafY]}
+              stroke={doorPalette.detail}
+              strokeWidth={1.5}
+              lineCap="round"
+            />
+            <Line
+              points={arcPoints}
+              stroke={doorPalette.detail}
+              strokeWidth={1.5}
+              lineCap="round"
+              lineJoin="round"
+            />
           </React.Fragment>
         );
       })}

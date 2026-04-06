@@ -5,12 +5,15 @@ import {
   unitConverter_userInputMetersToSystemCm,
 } from "../utils/units";
 
-type OptionalRoomType = "bathroom" | "bedroom" | "kitchen";
+type OptionalRoomType = "bathroom" | "bedroom" | "kitchen" | "garage" | "veranda" | "attachedBathroom";
 
 const roomLabels: Record<OptionalRoomType, string> = {
   bathroom: "Bathroom",
   bedroom: "Bedroom",
   kitchen: "Kitchen",
+  garage: "Garage",
+  veranda: "Veranda",
+  attachedBathroom: "Attached Bathroom",
 };
 
 export interface SubmittedRoomRequirements {
@@ -41,11 +44,17 @@ const ConfigureRoomsModal: React.FC<ConfigureRoomsModalProps> = ({
     bathroom: false,
     bedroom: false,
     kitchen: false,
+    garage: false,
+    veranda: false,
+    attachedBathroom: false,
   });
   const [roomCounts, setRoomCounts] = useState<Record<OptionalRoomType, number>>({
     bathroom: 0,
     bedroom: 0,
     kitchen: 0,
+    garage: 0,
+    veranda: 0,
+    attachedBathroom: 0,
   });
   const [floorWidthInput, setFloorWidthInput] = useState<string>("");
   const [floorHeightInput, setFloorHeightInput] = useState<string>("");
@@ -55,8 +64,8 @@ const ConfigureRoomsModal: React.FC<ConfigureRoomsModalProps> = ({
     if (!isOpen) return;
 
     if (!initialRequirements) {
-      setSelectedRooms({ bathroom: false, bedroom: false, kitchen: false });
-      setRoomCounts({ bathroom: 0, bedroom: 0, kitchen: 0 });
+      setSelectedRooms({ bathroom: false, bedroom: false, kitchen: false, garage: false, veranda: false, attachedBathroom: false });
+      setRoomCounts({ bathroom: 0, bedroom: 0, kitchen: 0, garage: 0, veranda: 0, attachedBathroom: 0 });
       setFloorWidthInput("");
       setFloorHeightInput("");
       setSubmitStatus(null);
@@ -68,11 +77,17 @@ const ConfigureRoomsModal: React.FC<ConfigureRoomsModalProps> = ({
       bathroom: false,
       bedroom: false,
       kitchen: false,
+      garage: false,
+      veranda: false,
+      attachedBathroom: false,
     };
     const nextCounts: Record<OptionalRoomType, number> = {
       bathroom: 0,
       bedroom: 0,
       kitchen: 0,
+      garage: 0,
+      veranda: 0,
+      attachedBathroom: 0,
     };
 
     for (const item of entries) {
@@ -93,6 +108,20 @@ const ConfigureRoomsModal: React.FC<ConfigureRoomsModalProps> = ({
     );
     setSubmitStatus(null);
   }, [isOpen, initialRequirements]);
+
+  useEffect(() => {
+    if (!isOpen || maxUsableWidth === null || maxUsableHeight === null) return;
+
+    // Only auto-fill if user hasn't entered custom values yet
+    if (floorWidthInput === "" && floorHeightInput === "") {
+      // Convert from cm to meters and round up to 1 decimal place
+      const roundedWidth = Math.ceil((maxUsableWidth / 100) * 10) / 10;
+      const roundedHeight = Math.ceil((maxUsableHeight / 100) * 10) / 10;
+
+      setFloorWidthInput(roundedWidth.toString());
+      setFloorHeightInput(roundedHeight.toString());
+    }
+  }, [isOpen, maxUsableWidth, maxUsableHeight, floorWidthInput, floorHeightInput]);
 
   const hasValidLimits = maxUsableWidth !== null && maxUsableHeight !== null;
 
@@ -179,7 +208,7 @@ const ConfigureRoomsModal: React.FC<ConfigureRoomsModalProps> = ({
         data: roomData,
       },
       should_optuna_run: true,
-      optuna_trial_count: 10,
+      optuna_trial_count: 50,
     };
 
     onSubmit({

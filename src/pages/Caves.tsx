@@ -18,9 +18,10 @@ import {
   formatFloorPlanV2,
   formatResponseToSegments,
   roomCentersFromCompactByRoom,
+  verandaFromMetadata,
 } from "../api/floorPlanFormatApi";
 import type { Coordinate, Label } from "../components/Konva/shapes/types";
-import type { CanvasOpening } from "../types";
+import type { CanvasOpening, CanvasVeranda } from "../types";
 import {
   unitConverter_systemCm2ToSqMetersDisplay,
   unitConverter_systemCmToMetersDisplay,
@@ -65,6 +66,7 @@ const Caves: React.FC = () => {
   const [segments, setSegments] = useState<Coordinate[][] | null>(null);
   const [labels, setLabels] = useState<Label[] | null>(null);
   const [openings, setOpenings] = useState<CanvasOpening[] | null>(null);
+  const [veranda, setVeranda] = useState<CanvasVeranda | null>(null);
   const [roomCenters, setRoomCenters] = useState<Coordinate[] | null>(null);
   const [isGeneratingFloorPlan, setIsGeneratingFloorPlan] = useState(false);
   const [floorPlanStatus, setFloorPlanStatus] = useState<string | null>(null);
@@ -98,6 +100,7 @@ const Caves: React.FC = () => {
     setSegments(null);
     setLabels(null);
     setOpenings(null);
+    setVeranda(null);
     setRoomCenters(null);
     setFloorPlanError(null);
     setShowFloorPlanView(false);
@@ -107,7 +110,7 @@ const Caves: React.FC = () => {
   };
 
   const invalidateFloorPlanFromStepA = () => {
-    if (segments || labels || openings || roomCenters || showFloorPlanView) {
+    if (segments || labels || openings || veranda || roomCenters || showFloorPlanView) {
       clearFloorPlanVisuals("Step A changed. Generated floor plan was cleared.");
     }
   };
@@ -270,6 +273,7 @@ const Caves: React.FC = () => {
     setSegments(null);
     setLabels(null);
     setOpenings(null);
+    setVeranda(null);
     setRoomCenters(null);
 
     try {
@@ -277,6 +281,7 @@ const Caves: React.FC = () => {
       setSegments(formatResponseToSegments(data));
       setLabels(compactRoomsToLabels(data));
       setOpenings(compactRoomsToOpenings(data));
+      setVeranda(verandaFromMetadata(data));
       setRoomCenters(roomCentersFromCompactByRoom(data));
       setFloorPlanStatus("Floor plan generated successfully.");
     } catch (error) {
@@ -320,6 +325,7 @@ const Caves: React.FC = () => {
                 segments,
                 labels,
                 openings,
+                veranda,
                 isLoading: isGeneratingFloorPlan,
                 status: floorPlanStatus,
               }}

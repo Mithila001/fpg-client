@@ -3,7 +3,7 @@ import type { RoomPoints } from "../InputPlanCanvas";
 import type { RoadPlacement } from "../utils/geometry";
 import type { UsableLandPoint } from "../../../api/usableLandApi";
 import type { Coordinate, Label } from "../shapes/types";
-import type { CanvasOpening } from "../../../types";
+import type { CanvasOpening, CanvasVeranda } from "../../../types";
 import StepAEditLayer from "./StepAEditLayer";
 import StepBFloorPlanLayer from "./StepBFloorPlanLayer";
 
@@ -29,6 +29,7 @@ interface UnifiedProcessCanvasProps {
     segments: Coordinate[][] | null;
     labels: Label[] | null;
     openings: CanvasOpening[] | null;
+    veranda: CanvasVeranda | null;
     isLoading: boolean;
     status: string | null;
   };
@@ -62,6 +63,7 @@ const UnifiedProcessCanvas: React.FC<UnifiedProcessCanvasProps> = ({
           segments={viewState.segments}
           labels={viewState.labels}
           openings={viewState.openings}
+          veranda={viewState.veranda}
           isLoading={viewState.isLoading}
           status={viewState.status}
         />

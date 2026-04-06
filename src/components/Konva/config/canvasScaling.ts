@@ -20,7 +20,7 @@ export const KONVA_ZOOM = {
 } as const;
 
 export const KONVA_GRID = {
-  baseStepCm: 10,
+  baseStepCm: 100,
   targetCells: 20,
   minScaleFactor: 0.05,
   maxScaleFactor: 5,
@@ -37,4 +37,20 @@ export const STEP_A_ROAD = {
 export const OPENING_STYLE = {
   windowGapPx: 3,
   arcSteps: 14,
+} as const;
+
+export const OPENING_COLORS = {
+  window: {
+    center: "#0f766e",
+    sideA: "#2dd4bf",
+    sideB: "#22d3ee",
+  },
+  door: {
+    base: "#92400e",
+    detail: "#b45309",
+  },
+  casedDoor: {
+    base: "#c2410c",
+    detail: "#ea580c",
+  },
 } as const;
