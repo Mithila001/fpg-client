@@ -39,14 +39,14 @@ const CoordinateCanvas = forwardRef<CoordinateCanvasHandle, CoordinateCanvasProp
 
     const scaledPoints = effectivePoints.map((p) => ({
       x: cmToPx(p.x, scale),
-      y: cmToPx(p.y, scale),
+      y: -cmToPx(p.y, scale),
       label: p.label,
     }));
 
     const scaledLabels: Label[] | undefined = labels
       ? labels.map((l) => ({
           x: cmToPx(l.x, scale),
-          y: cmToPx(l.y, scale),
+          y: -cmToPx(l.y, scale),
           text: l.text,
           fontSize: l.fontSize,
           color: l.color,
@@ -209,7 +209,7 @@ const CoordinateCanvas = forwardRef<CoordinateCanvasHandle, CoordinateCanvasProp
                     key={`seg-${idx}`}
                     points={seg.map((p) => ({
                       x: cmToPx(p.x, scale),
-                      y: cmToPx(p.y, scale),
+                      y: -cmToPx(p.y, scale),
                     }))}
                     thickness={wallThickness ?? 6}
                   />
@@ -221,7 +221,16 @@ const CoordinateCanvas = forwardRef<CoordinateCanvasHandle, CoordinateCanvasProp
               {scaledLabels && <Labels labels={scaledLabels} />}
 
               {openings && openings.length > 0 && (
-                <Openings openings={openings} pxPerCm={scale} offsetX={0} offsetY={0} />
+                <Openings 
+                  openings={openings.map(o => ({
+                    ...o,
+                    y1: -o.y1,
+                    y2: -o.y2,
+                  }))} 
+                  pxPerCm={scale} 
+                  offsetX={0} 
+                  offsetY={0} 
+                />
               )}
             </Layer>
           </Stage>

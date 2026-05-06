@@ -9,35 +9,7 @@ interface OpeningsProps {
   offsetY: number;
 }
 
-const rotate = (x: number, y: number, angle: number) => {
-  const cos = Math.cos(angle);
-  const sin = Math.sin(angle);
-  return {
-    x: x * cos - y * sin,
-    y: x * sin + y * cos,
-  };
-};
 
-const getArcPoints = (
-  startX: number,
-  startY: number,
-  endX: number,
-  endY: number,
-  sweepDirection: 1 | -1,
-): number[] => {
-  const vx = endX - startX;
-  const vy = endY - startY;
-  const points: number[] = [];
-
-  const steps = 14;
-  for (let i = 0; i <= steps; i += 1) {
-    const t = (Math.PI / 2) * (i / steps) * sweepDirection;
-    const rotated = rotate(vx, vy, t);
-    points.push(startX + rotated.x, startY + rotated.y);
-  }
-
-  return points;
-};
 
 const Openings: React.FC<OpeningsProps> = ({ openings, pxPerCm, offsetX, offsetY }) => {
   return (
@@ -79,19 +51,22 @@ const Openings: React.FC<OpeningsProps> = ({ openings, pxPerCm, offsetX, offsetY
           );
         }
 
-        const sweepDirection: 1 | -1 = opening.side === "west" || opening.side === "south" ? -1 : 1;
-        const arcPoints = getArcPoints(x1, y1, x2, y2, sweepDirection);
-
-        const leafAngle = (Math.PI / 2) * sweepDirection;
-        const leafEndpoint = rotate(dx, dy, leafAngle);
-        const leafX = x1 + leafEndpoint.x;
-        const leafY = y1 + leafEndpoint.y;
-
+        const gap = 3;
         return (
           <React.Fragment key={`opening-${idx}`}>
-            <Line points={[x1, y1, x2, y2]} stroke="#92400e" strokeWidth={2} lineCap="round" />
-            <Line points={[x1, y1, leafX, leafY]} stroke="#b45309" strokeWidth={1.5} lineCap="round" />
-            <Line points={arcPoints} stroke="#b45309" strokeWidth={1.5} lineCap="round" lineJoin="round" />
+            <Line points={[x1, y1, x2, y2]} stroke="#9f1239" strokeWidth={3} lineCap="round" />
+            <Line
+              points={[x1 + nx * gap, y1 + ny * gap, x2 + nx * gap, y2 + ny * gap]}
+              stroke="#ef4444"
+              strokeWidth={5}
+              lineCap="round"
+            />
+            <Line
+              points={[x1 - nx * gap, y1 - ny * gap, x2 - nx * gap, y2 - ny * gap]}
+              stroke="#fca5a5"
+              strokeWidth={5}
+              lineCap="round"
+            />
           </React.Fragment>
         );
       })}

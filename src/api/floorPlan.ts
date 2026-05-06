@@ -67,37 +67,35 @@ const openingTypeToKind = (openingType: string): "window" | "door" => {
   return openingType.toLowerCase().includes("window") ? "window" : "door";
 };
 
-const centroidFromVertices = (vertices: Array<[number, number]>): Coordinate | null => {
-  if (vertices.length === 0) return null;
+const centroidFromVertices = (vertices: Array<any>): Coordinate | null => {
+  if (!vertices || vertices.length === 0) return null;
 
-  let signedArea = 0;
-  let cx = 0;
-  let cy = 0;
+  let minX = Infinity;
+  let maxX = -Infinity;
+  let minY = Infinity;
+  let maxY = -Infinity;
 
-  for (let i = 0; i < vertices.length; i += 1) {
-    const [x0, y0] = vertices[i];
-    const [x1, y1] = vertices[(i + 1) % vertices.length];
-    const cross = x0 * y1 - x1 * y0;
-    signedArea += cross;
-    cx += (x0 + x1) * cross;
-    cy += (y0 + y1) * cross;
+  for (const v of vertices) {
+    let x, y;
+    if (Array.isArray(v)) {
+      [x, y] = v;
+    } else if (v && typeof v === 'object') {
+      x = v.x;
+      y = v.y;
+    }
+    if (typeof x === 'number' && typeof y === 'number') {
+      minX = Math.min(minX, x);
+      maxX = Math.max(maxX, x);
+      minY = Math.min(minY, y);
+      maxY = Math.max(maxY, y);
+    }
   }
 
-  if (signedArea === 0) {
-    const total = vertices.reduce((acc, [x, y]) => ({ x: acc.x + x, y: acc.y + y }), {
-      x: 0,
-      y: 0,
-    });
-    return {
-      x: total.x / vertices.length,
-      y: total.y / vertices.length,
-    };
-  }
+  if (minX === Infinity) return null;
 
-  const area = signedArea * 0.5;
   return {
-    x: cx / (6 * area),
-    y: cy / (6 * area),
+    x: minX + (maxX - minX) / 2,
+    y: minY + (maxY - minY) / 2,
   };
 };
 
