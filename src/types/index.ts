@@ -1,11 +1,15 @@
 export type {
   PlanStatus,
+  JobStatus,
   Point,
   Wall,
-  CompactOpening,
-  CompactRoom,
-  CompactByRoom,
-  FormatResponse,
+  OpeningData,
+  ProcessedRoomData,
+  UnifiedFloorPlan,
+  FloorPlanWithOpenings,
+  FormatV2Result,
+  JobEventPayload,
+  JobStateResponse,
 } from "./floorPlan";
 
 export type { OpeningKind, CanvasOpening } from "./drawing";

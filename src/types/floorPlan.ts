@@ -1,5 +1,7 @@
 export type PlanStatus = "FEASIBLE" | "INFEASIBLE" | "ERROR" | string;
 
+export type JobStatus = "SEARCHING" | "COMPLETED" | "TERMINATED" | "TIMED_OUT" | string;
+
 export interface Point {
   x: number;
   y: number;
@@ -12,9 +14,8 @@ export interface Wall {
   y2: number;
 }
 
-export interface CompactOpening {
+export interface OpeningData {
   room_name: string;
-  room_type: string;
   opening_type: string;
   side: string;
   x1: number;
@@ -22,21 +23,47 @@ export interface CompactOpening {
   x2: number;
   y2: number;
   connected_room_name: string | null;
-  connected_room_type: string | null;
 }
 
-export interface CompactRoom {
-  room_name: string;
-  room_type: string;
+export interface ProcessedRoomData {
+  type: string;
+  name: string;
+  area: number;
+  vertices: Array<[number, number]>;
+}
+
+export interface UnifiedFloorPlan {
   walls: Wall[];
-  openings: CompactOpening[];
+  total_wall_length: number;
 }
 
-export type CompactByRoom = Record<string, CompactRoom>;
+export interface FloorPlanWithOpenings {
+  floor_plan: ProcessedRoomData[];
+  openings: OpeningData[];
+}
 
-export interface FormatResponse {
+export interface FormatV2Result {
   status: PlanStatus;
   message: string;
-  walls: Wall[];
-  compact_by_room?: CompactByRoom;
+  score: number;
+  union_results: {
+    floor_plan_with_openings: FloorPlanWithOpenings;
+    unified_floor_plan: UnifiedFloorPlan;
+  };
+}
+
+export interface JobEventPayload {
+  id?: number;
+  event?: string;
+  message?: string;
+  timestamp?: string;
+  data?: unknown;
+}
+
+export interface JobStateResponse<T = unknown> {
+  job_id: string;
+  status: JobStatus;
+  result: T | null;
+  events: JobEventPayload[];
+  current_best_score: number | null;
 }

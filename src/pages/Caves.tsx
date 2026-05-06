@@ -1,4 +1,4 @@
-import React, { useMemo, useState } from "react";
+import React, { useEffect, useMemo, useRef, useState } from "react";
 import CavesCanvas from "../components/Konva/CavesCanvas";
 import type { RoomPoints, CornerKey } from "../components/Konva/InputPlanCanvas";
 import {
@@ -8,28 +8,28 @@ import {
   type RoadPlacement,
 } from "../components/Konva/utils/geometry";
 import {
-  getUsableLand,
-  type UsableLandPayload,
+  submitBuildableSpaceJob,
+  fetchBuildableSpaceJobState,
+  type BuildableSpaceRequest,
   type UsableLandPoint,
   type UsableLandRoadConnectedSegment,
 } from "../api/getUsableLand";
 import {
-  compactRoomsToLabels,
-  compactRoomsToOpenings,
-  formatFloorPlanV2,
-  formatResponseToSegments,
-  roomCentersFromCompactByRoom,
+  submitFormatV2Job,
+  fetchFormatV2JobState,
+  formatResultToSegments,
+  roomCentersFromResult,
+  roomsToLabels,
+  roomsToOpenings,
 } from "../api/floorPlan";
 import type { Coordinate, Label } from "../components/Konva/shapes/types";
-import type { CanvasOpening } from "../types";
-import {
-  formatAreaFromCm2,
-  formatLengthFromCm,
-  parseAreaM2InputToCm2,
-} from "../utils/units";
+import type { CanvasOpening, JobEventPayload } from "../types";
+import { formatAreaFromCm2, formatLengthFromCm, parseAreaM2InputToCm2 } from "../utils/units";
 import ConfigureRoomsModal, {
   type SubmittedRoomRequirements,
 } from "../components/ConfigureRoomsModal";
+import { subscribeToJobEvents } from "../api/client";
+import LoadingOverlay from "../components/LoadingOverlay";
 
 const KEYS: CornerKey[] = ["A", "B", "C", "D", "E", "F"];
 const MIN_BORDERS = 4;
@@ -71,12 +71,20 @@ const Caves: React.FC = () => {
   const [placedRoads, setPlacedRoads] = useState<RoadPlacement[]>([]);
   const [runAlgoStatus, setRunAlgoStatus] = useState<string | null>(null);
   const [isRunningAlgorithm, setIsRunningAlgorithm] = useState(false);
-  const [buildableRectangleVertices, setBuildableRectangleVertices] = useState<UsableLandPoint[] | null>(null);
+  const [buildableRectangleVertices, setBuildableRectangleVertices] = useState<
+    UsableLandPoint[] | null
+  >(null);
   const [shrunkBoundary, setShrunkBoundary] = useState<UsableLandPoint[] | null>(null);
-  const [buildableRectangleSize, setBuildableRectangleSize] = useState<{ width: number; height: number } | null>(null);
+  const [buildableRectangleSize, setBuildableRectangleSize] = useState<{
+    width: number;
+    height: number;
+  } | null>(null);
+  const buildableEventSourceRef = useRef<EventSource | null>(null);
+  const buildablePollRef = useRef<number | null>(null);
 
   const [isRoomsModalOpen, setIsRoomsModalOpen] = useState(false);
-  const [submittedRequirements, setSubmittedRequirements] = useState<SubmittedRoomRequirements | null>(null);
+  const [submittedRequirements, setSubmittedRequirements] =
+    useState<SubmittedRoomRequirements | null>(null);
 
   const [segments, setSegments] = useState<Coordinate[][] | null>(null);
   const [labels, setLabels] = useState<Label[] | null>(null);
@@ -86,6 +94,9 @@ const Caves: React.FC = () => {
   const [floorPlanStatus, setFloorPlanStatus] = useState<string | null>(null);
   const [floorPlanError, setFloorPlanError] = useState<string | null>(null);
   const [showFloorPlanView, setShowFloorPlanView] = useState(false);
+  const [floorPlanEvents, setFloorPlanEvents] = useState<JobEventPayload[]>([]);
+  const [floorPlanJobId, setFloorPlanJobId] = useState<string | null>(null);
+  const floorPlanEventSourceRef = useRef<EventSource | null>(null);
 
   const orderedKeys = useMemo(() => KEYS.slice(0, borderCount), [borderCount]);
 
@@ -127,6 +138,55 @@ const Caves: React.FC = () => {
       clearFloorPlanVisuals("Step A changed. Generated floor plan was cleared.");
     }
   };
+
+  const closeBuildableStream = () => {
+    if (buildableEventSourceRef.current) {
+      buildableEventSourceRef.current.close();
+      buildableEventSourceRef.current = null;
+    }
+  };
+
+  const stopBuildablePolling = () => {
+    if (buildablePollRef.current !== null) {
+      window.clearInterval(buildablePollRef.current);
+      buildablePollRef.current = null;
+    }
+  };
+
+  const closeFloorPlanStream = () => {
+    if (floorPlanEventSourceRef.current) {
+      floorPlanEventSourceRef.current.close();
+      floorPlanEventSourceRef.current = null;
+    }
+  };
+
+  const appendEvents = (
+    setter: React.Dispatch<React.SetStateAction<JobEventPayload[]>>,
+    event: JobEventPayload,
+  ) => {
+    setter((prev) => {
+      const next = [...prev, event];
+      return next.slice(-8);
+    });
+  };
+
+  const eventDisplay = (event: JobEventPayload): string => {
+    if (event.message) return event.message;
+    if (event.event) return event.event;
+    return "Processing...";
+  };
+
+  const isTerminalEvent = (eventName?: string): boolean => {
+    return eventName === "success" || eventName === "time_out" || eventName === "fpg_low_score";
+  };
+
+  useEffect(() => {
+    return () => {
+      closeBuildableStream();
+      stopBuildablePolling();
+      closeFloorPlanStream();
+    };
+  }, []);
 
   const addBorderLine = () => {
     if (isConfirmed || borderCount >= MAX_BORDERS) return;
@@ -214,11 +274,71 @@ const Caves: React.FC = () => {
     setRoadMode("idle");
   };
 
+  const finalizeBuildableJob = async (jobId: string) => {
+    try {
+      const state = await fetchBuildableSpaceJobState(jobId);
+      const result = state.result;
+
+      if (!result) {
+        setRunAlgoStatus(
+          `Step A finished with status ${state.status}, but no result was returned.`,
+        );
+        return;
+      }
+
+      const nextRectangle = result.buildable_rectangle?.vertices ?? [];
+      const nextBoundary = result.shrunk_boundary ?? [];
+      const nextRectangleWidth = result.buildable_rectangle?.width ?? null;
+      const nextRectangleHeight = result.buildable_rectangle?.height ?? null;
+
+      setBuildableRectangleVertices(nextRectangle.length > 0 ? nextRectangle : null);
+      setShrunkBoundary(nextBoundary.length > 0 ? nextBoundary : null);
+      setBuildableRectangleSize(
+        nextRectangleWidth !== null && nextRectangleHeight !== null
+          ? { width: nextRectangleWidth, height: nextRectangleHeight }
+          : null,
+      );
+
+      if (nextRectangle.length > 0 || nextBoundary.length > 0) {
+        setRunAlgoStatus(result.message || "Buildable space computed successfully.");
+      } else {
+        setRunAlgoStatus("Algorithm completed, but drawable geometry was not returned.");
+      }
+    } catch (error) {
+      const message = error instanceof Error ? error.message : "Unable to finalize algorithm.";
+      setBuildableRectangleVertices(null);
+      setShrunkBoundary(null);
+      setBuildableRectangleSize(null);
+      setRunAlgoStatus(`Failed to run algorithm: ${message}`);
+    } finally {
+      stopBuildablePolling();
+      setIsRunningAlgorithm(false);
+    }
+  };
+
+  const startBuildablePolling = (jobId: string) => {
+    stopBuildablePolling();
+    buildablePollRef.current = window.setInterval(async () => {
+      try {
+        const state = await fetchBuildableSpaceJobState(jobId);
+        if (state.status === "SEARCHING") return;
+        stopBuildablePolling();
+        void finalizeBuildableJob(jobId);
+      } catch (error) {
+        stopBuildablePolling();
+        const message = error instanceof Error ? error.message : "Unable to fetch job status.";
+        setRunAlgoStatus(`Failed to fetch job status: ${message}`);
+        setIsRunningAlgorithm(false);
+      }
+    }, 1500);
+  };
+
   const handleRunAlgorithm = async () => {
     if (placedRoads.length === 0 || isRunningAlgorithm || isGeneratingFloorPlan) return;
 
+    closeBuildableStream();
     setIsRunningAlgorithm(true);
-    setRunAlgoStatus("Running Step A algorithm...");
+    setRunAlgoStatus("Submitting Step A job...");
 
     const area = calculatePolygonArea(points, orderedKeys);
 
@@ -238,35 +358,35 @@ const Caves: React.FC = () => {
       })
       .filter((item): item is UsableLandRoadConnectedSegment => item !== null);
 
-    const payload: UsableLandPayload = {
+    const payload: BuildableSpaceRequest = {
       area,
       segmentsCoordinates: buildClosedLoopCoordinates(points, orderedKeys),
       roadConnected,
       min_width: 100,
       min_height: 100,
-      should_plot: true,
     };
 
     try {
-      const response = await getUsableLand(payload);
-      const nextRectangle = response.buildable_rectangle?.vertices ?? [];
-      const nextBoundary = response.shrunk_boundary ?? [];
-      const nextRectangleWidth = response.buildable_rectangle?.width ?? null;
-      const nextRectangleHeight = response.buildable_rectangle?.height ?? null;
+      const submission = await submitBuildableSpaceJob(payload);
+      setRunAlgoStatus(submission.message || `Step A job submitted (${submission.job_id}).`);
+      startBuildablePolling(submission.job_id);
 
-      setBuildableRectangleVertices(nextRectangle.length > 0 ? nextRectangle : null);
-      setShrunkBoundary(nextBoundary.length > 0 ? nextBoundary : null);
-      setBuildableRectangleSize(
-        nextRectangleWidth !== null && nextRectangleHeight !== null
-          ? { width: nextRectangleWidth, height: nextRectangleHeight }
-          : null,
+      buildableEventSourceRef.current = subscribeToJobEvents(
+        submission.job_id,
+        (event) => {
+          setRunAlgoStatus(eventDisplay(event));
+
+          if (isTerminalEvent(event.event)) {
+            closeBuildableStream();
+            stopBuildablePolling();
+            void finalizeBuildableJob(submission.job_id);
+          }
+        },
+        () => {
+          closeBuildableStream();
+          setRunAlgoStatus("Step A updates disconnected. Polling job status...");
+        },
       );
-
-      if (nextRectangle.length > 0 || nextBoundary.length > 0) {
-        setRunAlgoStatus(response.message || "Buildable space computed successfully.");
-      } else {
-        setRunAlgoStatus("Algorithm completed, but drawable geometry was not returned.");
-      }
     } catch (error) {
       const message = error instanceof Error ? error.message : "Unable to run algorithm.";
       setBuildableRectangleVertices(null);
@@ -274,7 +394,9 @@ const Caves: React.FC = () => {
       setBuildableRectangleSize(null);
       setRunAlgoStatus(`Failed to run algorithm: ${message}`);
     } finally {
-      setIsRunningAlgorithm(false);
+      if (!buildableEventSourceRef.current && buildablePollRef.current === null) {
+        setIsRunningAlgorithm(false);
+      }
     }
   };
 
@@ -289,13 +411,41 @@ const Caves: React.FC = () => {
     setIsRoomsModalOpen(false);
   };
 
+  const finalizeFloorPlanJob = async (jobId: string) => {
+    try {
+      const state = await fetchFormatV2JobState(jobId);
+      const result = state.result;
+
+      if (!result) {
+        setFloorPlanError(`Job finished with status ${state.status}, but no result was returned.`);
+        setFloorPlanStatus(`Job ended with status ${state.status}.`);
+        return;
+      }
+
+      setSegments(formatResultToSegments(result));
+      setLabels(roomsToLabels(result));
+      setOpenings(roomsToOpenings(result));
+      setRoomCenters(roomCentersFromResult(result));
+      setFloorPlanStatus(result.message || "Floor plan generated successfully.");
+    } catch (error) {
+      const message = error instanceof Error ? error.message : "Failed to finalize floor plan.";
+      setFloorPlanError(message);
+      setFloorPlanStatus(`Failed to generate floor plan: ${message}`);
+    } finally {
+      setIsGeneratingFloorPlan(false);
+    }
+  };
+
   const handleGenerateFloorPlan = async () => {
     if (!submittedRequirements || isGeneratingFloorPlan || isRunningAlgorithm) return;
 
+    closeFloorPlanStream();
     setShowFloorPlanView(true);
     setIsGeneratingFloorPlan(true);
     setFloorPlanError(null);
-    setFloorPlanStatus("Generating floor plan...");
+    setFloorPlanStatus("Submitting floor plan job...");
+    setFloorPlanEvents([]);
+    setFloorPlanJobId(null);
 
     setSegments(null);
     setLabels(null);
@@ -303,18 +453,35 @@ const Caves: React.FC = () => {
     setRoomCenters(null);
 
     try {
-      const data = await formatFloorPlanV2(submittedRequirements.payload);
-      setSegments(formatResponseToSegments(data));
-      setLabels(compactRoomsToLabels(data));
-      setOpenings(compactRoomsToOpenings(data));
-      setRoomCenters(roomCentersFromCompactByRoom(data));
-      setFloorPlanStatus("Floor plan generated successfully.");
+      const submission = await submitFormatV2Job(submittedRequirements.payload);
+      setFloorPlanJobId(submission.job_id);
+      setFloorPlanStatus(submission.message || `Floor plan job submitted (${submission.job_id}).`);
+
+      floorPlanEventSourceRef.current = subscribeToJobEvents(
+        submission.job_id,
+        (event) => {
+          appendEvents(setFloorPlanEvents, event);
+          setFloorPlanStatus(eventDisplay(event));
+
+          if (isTerminalEvent(event.event)) {
+            closeFloorPlanStream();
+            void finalizeFloorPlanJob(submission.job_id);
+          }
+        },
+        () => {
+          closeFloorPlanStream();
+          setFloorPlanError("Live updates disconnected. Check job status.");
+          setIsGeneratingFloorPlan(false);
+        },
+      );
     } catch (error) {
       const message = error instanceof Error ? error.message : "Failed to generate floor plan.";
       setFloorPlanError(message);
       setFloorPlanStatus(`Failed to generate floor plan: ${message}`);
     } finally {
-      setIsGeneratingFloorPlan(false);
+      if (!floorPlanEventSourceRef.current) {
+        setIsGeneratingFloorPlan(false);
+      }
     }
   };
 
@@ -325,9 +492,11 @@ const Caves: React.FC = () => {
       <div className="flex min-h-0 flex-1 overflow-hidden">
         <div className="flex w-[72%] min-w-0 flex-col gap-2 bg-slate-100 p-2">
           <div className="text-sm text-slate-700">
-            {canvasMode === "edit" ? "Step A: Land Boundary Workspace" : "Step B: Floor Plan Preview"}
+            {canvasMode === "edit"
+              ? "Step A: Land Boundary Workspace"
+              : "Step B: Floor Plan Preview"}
           </div>
-          <div className="min-h-0 flex-1 overflow-hidden rounded border border-slate-200 bg-white p-1">
+          <div className="relative min-h-0 flex-1 overflow-hidden rounded border border-slate-200 bg-white p-1">
             <CavesCanvas
               mode={canvasMode}
               editState={{
@@ -353,6 +522,14 @@ const Caves: React.FC = () => {
                 isLoading: isGeneratingFloorPlan,
                 status: floorPlanStatus,
               }}
+            />
+            <LoadingOverlay
+              isOpen={isGeneratingFloorPlan}
+              title="Generating Floor Plan"
+              subtitle={
+                floorPlanJobId ? `Job ID: ${floorPlanJobId}` : "Waiting for server response"
+              }
+              events={floorPlanEvents}
             />
           </div>
         </div>
@@ -388,7 +565,8 @@ const Caves: React.FC = () => {
               ) : (
                 <div className="flex flex-col gap-3">
                   <div className="text-xs text-slate-600">
-                    Current Area: <span className="font-semibold">{formatAreaFromCm2(currentArea, 2)}</span>
+                    Current Area:{" "}
+                    <span className="font-semibold">{formatAreaFromCm2(currentArea, 2)}</span>
                   </div>
 
                   <label className="flex flex-col gap-1 text-xs text-slate-700">
@@ -417,7 +595,12 @@ const Caves: React.FC = () => {
 
                   <button
                     onClick={handleRoadButtonClick}
-                    disabled={!isConfirmed || lastAppliedArea === null || isRunningAlgorithm || isGeneratingFloorPlan}
+                    disabled={
+                      !isConfirmed ||
+                      lastAppliedArea === null ||
+                      isRunningAlgorithm ||
+                      isGeneratingFloorPlan
+                    }
                     className="w-full rounded bg-slate-700 px-3 py-2 text-sm text-white hover:bg-slate-800 disabled:cursor-not-allowed disabled:opacity-50"
                   >
                     {roadMode === "placing" ? "Cancel Road" : "Add Road"}
@@ -425,7 +608,8 @@ const Caves: React.FC = () => {
 
                   {roadMode === "placing" && (
                     <div className="text-[11px] text-slate-600">
-                      Place Road mode active. Hover near a boundary segment, left click to place, right click to cancel.
+                      Place Road mode active. Hover near a boundary segment, left click to place,
+                      right click to cancel.
                     </div>
                   )}
 
@@ -445,7 +629,9 @@ const Caves: React.FC = () => {
                     </button>
                   )}
 
-                  {runAlgoStatus && <div className="text-[11px] text-indigo-700">{runAlgoStatus}</div>}
+                  {runAlgoStatus && (
+                    <div className="text-[11px] text-indigo-700">{runAlgoStatus}</div>
+                  )}
 
                   {buildableRectangleSize && (
                     <div className="rounded border border-emerald-200 bg-emerald-50 p-2 text-xs text-emerald-800">
@@ -458,7 +644,9 @@ const Caves: React.FC = () => {
             </section>
 
             <section className="rounded-md border border-slate-200 p-3">
-              <h2 className="mb-2 text-sm font-semibold text-slate-800">Step B: Rooms and Generation</h2>
+              <h2 className="mb-2 text-sm font-semibold text-slate-800">
+                Step B: Rooms and Generation
+              </h2>
 
               <button
                 onClick={handleOpenConfigureRooms}
@@ -478,7 +666,10 @@ const Caves: React.FC = () => {
                 <div className="font-medium text-slate-800">Saved Room Requirements</div>
                 <div>{submittedRequirements?.roomSummary ?? "Not submitted yet."}</div>
                 <div>
-                  Floor Size: {submittedRequirements ? `${submittedRequirements.floorWidthCm / 100} m x ${submittedRequirements.floorHeightCm / 100} m` : "Not set"}
+                  Floor Size:{" "}
+                  {submittedRequirements
+                    ? `${submittedRequirements.floorWidthCm / 100} m x ${submittedRequirements.floorHeightCm / 100} m`
+                    : "Not set"}
                 </div>
               </div>
 
@@ -500,10 +691,14 @@ const Caves: React.FC = () => {
                 </button>
               )}
 
-              {floorPlanStatus && <div className="mt-2 text-xs text-indigo-700">{floorPlanStatus}</div>}
+              {floorPlanStatus && (
+                <div className="mt-2 text-xs text-indigo-700">{floorPlanStatus}</div>
+              )}
               {floorPlanError && <div className="mt-1 text-xs text-red-600">{floorPlanError}</div>}
               {segments && (
-                <div className="mt-1 text-xs text-slate-600">Generated rooms: {roomCenters?.length ?? 0}</div>
+                <div className="mt-1 text-xs text-slate-600">
+                  Generated rooms: {roomCenters?.length ?? 0}
+                </div>
               )}
             </section>
           </div>

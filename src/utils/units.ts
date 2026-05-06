@@ -1,9 +1,6 @@
 export const CM_PER_METER = 100;
 export const CM2_PER_M2 = CM_PER_METER * CM_PER_METER;
 
-// Backend raw values are scaled by 10 to become centimeters.
-export const apiRawToCm = (value: number): number => value * 10;
-
 export const cmToM = (cm: number): number => cm / CM_PER_METER;
 export const mToCm = (m: number): number => m * CM_PER_METER;
 

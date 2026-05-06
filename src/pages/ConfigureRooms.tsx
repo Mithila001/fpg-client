@@ -16,6 +16,12 @@ const roomLabels: Record<OptionalRoomType, string> = {
   kitchen: "Kitchen",
 };
 
+const roomSizes: Record<OptionalRoomType, string> = {
+  bathroom: "Small",
+  bedroom: "Medium",
+  kitchen: "Medium",
+};
+
 const isFiniteNumber = (value: unknown): value is number =>
   typeof value === "number" && Number.isFinite(value);
 
@@ -23,8 +29,12 @@ const ConfigureRooms: React.FC = () => {
   const location = useLocation();
   const routeState = (location.state ?? {}) as ConfigureRoomsRouteState;
 
-  const maxUsableWidth = isFiniteNumber(routeState.maxUsableWidth) ? routeState.maxUsableWidth : null;
-  const maxUsableHeight = isFiniteNumber(routeState.maxUsableHeight) ? routeState.maxUsableHeight : null;
+  const maxUsableWidth = isFiniteNumber(routeState.maxUsableWidth)
+    ? routeState.maxUsableWidth
+    : null;
+  const maxUsableHeight = isFiniteNumber(routeState.maxUsableHeight)
+    ? routeState.maxUsableHeight
+    : null;
   const maxUsableWidthMeters = maxUsableWidth !== null ? maxUsableWidth / 100 : null;
   const maxUsableHeightMeters = maxUsableHeight !== null ? maxUsableHeight / 100 : null;
 
@@ -89,7 +99,9 @@ const ConfigureRooms: React.FC = () => {
     event.preventDefault();
 
     if (!hasValidLimits || maxUsableWidth === null || maxUsableHeight === null) {
-      setSubmitStatus("Max usable width/height is missing. Please run algorithm from Input Plan first.");
+      setSubmitStatus(
+        "Max usable width/height is missing. Please run algorithm from Input Plan first.",
+      );
       return;
     }
 
@@ -111,11 +123,22 @@ const ConfigureRooms: React.FC = () => {
       return;
     }
 
-    const roomData = [
-      selectedRooms.bathroom && { id: "bathroom1", type: "bathroom" },
-      selectedRooms.bedroom && { id: "bedroom1", type: "bedroom" },
-      selectedRooms.kitchen && { id: "kitchen1", type: "kitchen" },
-    ].filter((item): item is { id: string; type: string } => item !== false);
+    const roomData: Array<{ type: string; size: string; name?: string }> = [
+      { type: "Living Room", size: "Large", name: "Main Lounge" },
+    ];
+
+    (Object.keys(roomLabels) as OptionalRoomType[]).forEach((roomType) => {
+      if (!selectedRooms[roomType]) return;
+      const count = Math.max(0, roomCounts[roomType]);
+      for (let i = 1; i <= count; i += 1) {
+        const label = roomLabels[roomType];
+        roomData.push({
+          type: label,
+          size: roomSizes[roomType],
+          name: `${label} ${i}`,
+        });
+      }
+    });
 
     const payload: FormatV2Request = {
       floor_width: floorWidthCm,
@@ -150,7 +173,10 @@ const ConfigureRooms: React.FC = () => {
               <h2 className="text-sm font-semibold text-slate-800 mb-3">Room Requirements</h2>
 
               {(Object.keys(roomLabels) as OptionalRoomType[]).map((roomType) => (
-                <div key={roomType} className="grid grid-cols-[1fr_130px] gap-3 items-center py-2 border-b border-slate-100 last:border-b-0">
+                <div
+                  key={roomType}
+                  className="grid grid-cols-[1fr_130px] gap-3 items-center py-2 border-b border-slate-100 last:border-b-0"
+                >
                   <label className="flex items-center gap-2 text-sm text-slate-700">
                     <input
                       type="checkbox"
@@ -242,7 +268,7 @@ const ConfigureRooms: React.FC = () => {
           </form>
         </section>
 
-        <aside className="w-[32%] min-w-[280px] rounded-lg border border-slate-200 bg-white p-4 flex flex-col gap-4 overflow-auto">
+        <aside className="w-[32%] min-w-70 rounded-lg border border-slate-200 bg-white p-4 flex flex-col gap-4 overflow-auto">
           <h2 className="text-base font-semibold text-slate-800">Current Setup Details</h2>
 
           <div className="rounded border border-slate-200 bg-slate-50 p-3 text-sm text-slate-700">
@@ -255,7 +281,9 @@ const ConfigureRooms: React.FC = () => {
             <div>
               Max Usable Height:{" "}
               <span className="font-semibold">
-                {maxUsableHeight !== null ? formatLengthFromCm(maxUsableHeight, 2) : "Not available"}
+                {maxUsableHeight !== null
+                  ? formatLengthFromCm(maxUsableHeight, 2)
+                  : "Not available"}
               </span>
             </div>
           </div>

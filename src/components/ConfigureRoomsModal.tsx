@@ -10,6 +10,12 @@ const roomLabels: Record<OptionalRoomType, string> = {
   kitchen: "Kitchen",
 };
 
+const roomSizes: Record<OptionalRoomType, string> = {
+  bathroom: "Small",
+  bedroom: "Medium",
+  kitchen: "Medium",
+};
+
 export interface SubmittedRoomRequirements {
   payload: FormatV2Request;
   roomSummary: string;
@@ -73,7 +79,8 @@ const ConfigureRoomsModal: React.FC<ConfigureRoomsModalProps> = ({
     };
 
     for (const item of entries) {
-      const maybeType = item.type as OptionalRoomType;
+      const normalized = item.type.trim().toLowerCase();
+      const maybeType = normalized as OptionalRoomType;
       if (!(maybeType in roomLabels)) continue;
 
       nextSelected[maybeType] = true;
@@ -154,13 +161,20 @@ const ConfigureRoomsModal: React.FC<ConfigureRoomsModalProps> = ({
       return;
     }
 
-    const roomData: Array<{ id: string; type: string }> = [];
+    const roomData: Array<{ type: string; size: string; name?: string }> = [
+      { type: "Living Room", size: "Large", name: "Main Lounge" },
+    ];
 
     (Object.keys(roomLabels) as OptionalRoomType[]).forEach((roomType) => {
       if (!selectedRooms[roomType]) return;
       const count = Math.max(0, roomCounts[roomType]);
       for (let i = 1; i <= count; i += 1) {
-        roomData.push({ id: `${roomType}${i}`, type: roomType });
+        const label = roomLabels[roomType];
+        roomData.push({
+          type: label,
+          size: roomSizes[roomType],
+          name: `${label} ${i}`,
+        });
       }
     });
 
@@ -205,7 +219,10 @@ const ConfigureRoomsModal: React.FC<ConfigureRoomsModalProps> = ({
           <div className="rounded-md border border-slate-200 p-3">
             <h3 className="mb-3 text-sm font-semibold text-slate-800">Room Requirements</h3>
             {(Object.keys(roomLabels) as OptionalRoomType[]).map((roomType) => (
-              <div key={roomType} className="grid grid-cols-[1fr_130px] items-center gap-3 border-b border-slate-100 py-2 last:border-b-0">
+              <div
+                key={roomType}
+                className="grid grid-cols-[1fr_130px] items-center gap-3 border-b border-slate-100 py-2 last:border-b-0"
+              >
                 <label className="flex items-center gap-2 text-sm text-slate-700">
                   <input
                     type="checkbox"
@@ -228,7 +245,9 @@ const ConfigureRoomsModal: React.FC<ConfigureRoomsModalProps> = ({
                 />
               </div>
             ))}
-            <div className="mt-2 text-xs text-slate-600">Living room is always included by default.</div>
+            <div className="mt-2 text-xs text-slate-600">
+              Living room is always included by default.
+            </div>
           </div>
 
           <div className="rounded-md border border-slate-200 p-3">
@@ -261,7 +280,8 @@ const ConfigureRoomsModal: React.FC<ConfigureRoomsModalProps> = ({
               </label>
             </div>
             <div className="mt-3 text-xs text-slate-600">
-              Max usable size: {maxUsableWidth !== null ? formatLengthFromCm(maxUsableWidth, 2) : "N/A"} x{" "}
+              Max usable size:{" "}
+              {maxUsableWidth !== null ? formatLengthFromCm(maxUsableWidth, 2) : "N/A"} x{" "}
               {maxUsableHeight !== null ? formatLengthFromCm(maxUsableHeight, 2) : "N/A"}
             </div>
           </div>

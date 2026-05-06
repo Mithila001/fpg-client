@@ -1,6 +1,9 @@
-import React, { useMemo, useState } from "react";
+import React, { useEffect, useMemo, useRef, useState } from "react";
 import { useNavigate } from "react-router-dom";
-import InputPlanCanvas, { type RoomPoints, type CornerKey } from "../components/Konva/InputPlanCanvas";
+import InputPlanCanvas, {
+  type RoomPoints,
+  type CornerKey,
+} from "../components/Konva/InputPlanCanvas";
 import {
   calculatePolygonArea,
   calculatePolygonCentroid,
@@ -8,16 +11,14 @@ import {
   type RoadPlacement,
 } from "../components/Konva/utils/geometry";
 import {
-  getUsableLand,
-  type UsableLandPayload,
+  submitBuildableSpaceJob,
+  fetchBuildableSpaceJobState,
+  type BuildableSpaceRequest,
   type UsableLandPoint,
   type UsableLandRoadConnectedSegment,
 } from "../api/getUsableLand.ts";
-import {
-  formatAreaFromCm2,
-  formatLengthFromCm,
-  parseAreaM2InputToCm2,
-} from "../utils/units";
+import { subscribeToJobEvents } from "../api/client";
+import { formatAreaFromCm2, formatLengthFromCm, parseAreaM2InputToCm2 } from "../utils/units";
 
 const KEYS: CornerKey[] = ["A", "B", "C", "D", "E", "F"];
 const MIN_BORDERS = 4;
@@ -60,9 +61,16 @@ const InputPlan: React.FC = () => {
   const [placedRoads, setPlacedRoads] = useState<RoadPlacement[]>([]);
   const [runAlgoStatus, setRunAlgoStatus] = useState<string | null>(null);
   const [isRunningAlgorithm, setIsRunningAlgorithm] = useState(false);
-  const [buildableRectangleVertices, setBuildableRectangleVertices] = useState<UsableLandPoint[] | null>(null);
+  const [buildableRectangleVertices, setBuildableRectangleVertices] = useState<
+    UsableLandPoint[] | null
+  >(null);
   const [shrunkBoundary, setShrunkBoundary] = useState<UsableLandPoint[] | null>(null);
-  const [buildableRectangleSize, setBuildableRectangleSize] = useState<{ width: number; height: number } | null>(null);
+  const [buildableRectangleSize, setBuildableRectangleSize] = useState<{
+    width: number;
+    height: number;
+  } | null>(null);
+  const eventSourceRef = useRef<EventSource | null>(null);
+  const buildablePollRef = useRef<number | null>(null);
   const navigate = useNavigate();
 
   const clearAlgorithmResultState = () => {
@@ -135,11 +143,90 @@ const InputPlan: React.FC = () => {
     setRoadMode("idle");
   };
 
+  const closeStream = () => {
+    if (eventSourceRef.current) {
+      eventSourceRef.current.close();
+      eventSourceRef.current = null;
+    }
+  };
+
+  const stopBuildablePolling = () => {
+    if (buildablePollRef.current !== null) {
+      window.clearInterval(buildablePollRef.current);
+      buildablePollRef.current = null;
+    }
+  };
+
+  useEffect(() => {
+    return () => {
+      closeStream();
+      stopBuildablePolling();
+    };
+  }, []);
+
+  const finalizeBuildableJob = async (jobId: string) => {
+    try {
+      const state = await fetchBuildableSpaceJobState(jobId);
+      const result = state.result;
+
+      if (!result) {
+        setRunAlgoStatus(`Job finished with status ${state.status}, but no result was returned.`);
+        return;
+      }
+
+      const nextRectangle = result.buildable_rectangle?.vertices ?? [];
+      const nextBoundary = result.shrunk_boundary ?? [];
+      const nextRectangleWidth = result.buildable_rectangle?.width ?? null;
+      const nextRectangleHeight = result.buildable_rectangle?.height ?? null;
+
+      setBuildableRectangleVertices(nextRectangle.length > 0 ? nextRectangle : null);
+      setShrunkBoundary(nextBoundary.length > 0 ? nextBoundary : null);
+      setBuildableRectangleSize(
+        nextRectangleWidth !== null && nextRectangleHeight !== null
+          ? { width: nextRectangleWidth, height: nextRectangleHeight }
+          : null,
+      );
+
+      if (nextRectangle.length > 0 || nextBoundary.length > 0) {
+        setRunAlgoStatus(result.message || "Buildable space computed successfully.");
+      } else {
+        setRunAlgoStatus("Algorithm completed, but drawable geometry was not returned.");
+      }
+    } catch (error) {
+      const message = error instanceof Error ? error.message : "Unable to run algorithm.";
+      setBuildableRectangleVertices(null);
+      setShrunkBoundary(null);
+      setBuildableRectangleSize(null);
+      setRunAlgoStatus(`Failed to run algorithm: ${message}`);
+    } finally {
+      stopBuildablePolling();
+      setIsRunningAlgorithm(false);
+    }
+  };
+
+  const startBuildablePolling = (jobId: string) => {
+    stopBuildablePolling();
+    buildablePollRef.current = window.setInterval(async () => {
+      try {
+        const state = await fetchBuildableSpaceJobState(jobId);
+        if (state.status === "SEARCHING") return;
+        stopBuildablePolling();
+        void finalizeBuildableJob(jobId);
+      } catch (error) {
+        stopBuildablePolling();
+        const message = error instanceof Error ? error.message : "Unable to fetch job status.";
+        setRunAlgoStatus(`Failed to fetch job status: ${message}`);
+        setIsRunningAlgorithm(false);
+      }
+    }, 1500);
+  };
+
   const handleRunAlgorithm = async () => {
     if (placedRoads.length === 0 || isRunningAlgorithm) return;
 
+    closeStream();
     setIsRunningAlgorithm(true);
-    setRunAlgoStatus("Running algorithm...");
+    setRunAlgoStatus("Submitting job...");
 
     const orderedKeys = KEYS.slice(0, borderCount);
     const area = calculatePolygonArea(points, orderedKeys);
@@ -162,35 +249,39 @@ const InputPlan: React.FC = () => {
       })
       .filter((item): item is UsableLandRoadConnectedSegment => item !== null);
 
-    const payload: UsableLandPayload = {
+    const payload: BuildableSpaceRequest = {
       area,
       segmentsCoordinates: buildClosedLoopCoordinates(points, orderedKeys),
       roadConnected,
       min_width: 100,
       min_height: 100,
-      should_plot: true,
     };
 
     try {
-      const response = await getUsableLand(payload);
-      const nextRectangle = response.buildable_rectangle?.vertices ?? [];
-      const nextBoundary = response.shrunk_boundary ?? [];
-      const nextRectangleWidth = response.buildable_rectangle?.width ?? null;
-      const nextRectangleHeight = response.buildable_rectangle?.height ?? null;
+      const submission = await submitBuildableSpaceJob(payload);
+      setRunAlgoStatus(submission.message || `Job submitted (${submission.job_id}).`);
+      startBuildablePolling(submission.job_id);
 
-      setBuildableRectangleVertices(nextRectangle.length > 0 ? nextRectangle : null);
-      setShrunkBoundary(nextBoundary.length > 0 ? nextBoundary : null);
-      setBuildableRectangleSize(
-        nextRectangleWidth !== null && nextRectangleHeight !== null
-          ? { width: nextRectangleWidth, height: nextRectangleHeight }
-          : null,
+      eventSourceRef.current = subscribeToJobEvents(
+        submission.job_id,
+        (event) => {
+          setRunAlgoStatus(event.message ?? event.event ?? "Processing...");
+
+          if (
+            event.event === "success" ||
+            event.event === "time_out" ||
+            event.event === "fpg_low_score"
+          ) {
+            closeStream();
+            stopBuildablePolling();
+            void finalizeBuildableJob(submission.job_id);
+          }
+        },
+        () => {
+          closeStream();
+          setRunAlgoStatus("Live updates disconnected. Polling job status...");
+        },
       );
-
-      if (nextRectangle.length > 0 || nextBoundary.length > 0) {
-        setRunAlgoStatus(response.message || "Buildable space computed successfully.");
-      } else {
-        setRunAlgoStatus("Algorithm completed, but drawable geometry was not returned.");
-      }
     } catch (error) {
       const message = error instanceof Error ? error.message : "Unable to run algorithm.";
       setBuildableRectangleVertices(null);
@@ -198,7 +289,9 @@ const InputPlan: React.FC = () => {
       setBuildableRectangleSize(null);
       setRunAlgoStatus(`Failed to run algorithm: ${message}`);
     } finally {
-      setIsRunningAlgorithm(false);
+      if (!eventSourceRef.current && buildablePollRef.current === null) {
+        setIsRunningAlgorithm(false);
+      }
     }
   };
 
@@ -224,7 +317,7 @@ const InputPlan: React.FC = () => {
 
     // Basic validity bounds could be checking if vertices are too extreme, but zooming allows moving around.
     // For now we assume if it's convex base, scaling is convex.
-    
+
     clearAlgorithmResultState();
     setPoints(scaledPoints);
     setLastAppliedArea(targetAreaCm2);
@@ -267,11 +360,11 @@ const InputPlan: React.FC = () => {
           </div>
         </div>
 
-        <div className="bg-slate-100 w-[28%] min-w-[280px] p-4 flex flex-col gap-4 border-l border-gray-200">
+        <div className="bg-slate-100 w-[28%] min-w-70 p-4 flex flex-col gap-4 border-l border-gray-200">
           <div className="rounded-md border border-gray-300 bg-white p-4 flex flex-col gap-3">
             <h2 className="text-sm font-semibold text-gray-800">Shape Definition</h2>
             <div className="text-xs text-gray-600">Land border lines: {borderCount}</div>
-            <div className="text-xs text-gray-500 break-words">{shapeSummary}</div>
+            <div className="text-xs text-gray-500 wrap-break-word">{shapeSummary}</div>
             <div className="flex gap-2">
               <button
                 onClick={handleConfirmShape}
@@ -297,11 +390,14 @@ const InputPlan: React.FC = () => {
             ) : (
               <div className="flex flex-col gap-3">
                 <div className="text-xs text-gray-600">
-                  Current Area: <span className="font-semibold">{formatAreaFromCm2(currentArea, 2)}</span>
+                  Current Area:{" "}
+                  <span className="font-semibold">{formatAreaFromCm2(currentArea, 2)}</span>
                 </div>
-                
+
                 <div className="flex flex-col gap-1">
-                  <label htmlFor="areaInput" className="text-xs text-gray-700">Target Area (m²)</label>
+                  <label htmlFor="areaInput" className="text-xs text-gray-700">
+                    Target Area (m²)
+                  </label>
                   <input
                     id="areaInput"
                     type="number"
@@ -316,7 +412,7 @@ const InputPlan: React.FC = () => {
                 </div>
 
                 {scaleError && <div className="text-xs text-red-600">{scaleError}</div>}
-                
+
                 <button
                   onClick={handleApplyArea}
                   disabled={isRunningAlgorithm}
@@ -336,7 +432,8 @@ const InputPlan: React.FC = () => {
 
                   {roadMode === "placing" && (
                     <div className="text-[11px] text-slate-600">
-                      Place Road mode is active. Hover near a boundary segment, left click to place, right click to cancel.
+                      Place Road mode is active. Hover near a boundary segment, left click to place,
+                      right click to cancel.
                     </div>
                   )}
 

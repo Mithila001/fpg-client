@@ -3,16 +3,17 @@ import { useLocation } from "react-router-dom";
 import CoordinateCanvas from "../components/Konva/KonvaCanvas";
 import type { CoordinateCanvasHandle } from "../components/Konva/KonvaCanvas";
 import {
-  compactRoomsToLabels,
-  compactRoomsToOpenings,
-  fetchFormattedPlan,
-  formatFloorPlanV2,
-  formatResponseToSegments,
-  roomCentersFromCompactByRoom,
+  submitFormatV2Job,
+  fetchFormatV2JobState,
+  formatResultToSegments,
+  roomCentersFromResult,
+  roomsToLabels,
+  roomsToOpenings,
   type FormatV2Request,
-} from "../api/floorPlan";
+} from "../api/floorPlan.ts";
 import type { Coordinate, Label } from "../components/Konva/shapes/types";
 import type { CanvasOpening } from "../types";
+import { subscribeToJobEvents } from "../api/client";
 
 type HomeRouteState = {
   generateRequest?: FormatV2Request;
@@ -27,10 +28,36 @@ const Home: React.FC = () => {
   const [openings, setOpenings] = useState<CanvasOpening[] | null>(null);
   const [loading, setLoading] = useState(false);
   const [error, setError] = useState<string | null>(null);
+  const [status, setStatus] = useState<string | null>(null);
   const lastRequestAtRef = useRef(0);
   const inFlightRef = useRef(false);
+  const eventSourceRef = useRef<EventSource | null>(null);
+
+  const defaultRequest: FormatV2Request = {
+    floor_width: 1000,
+    floor_height: 800,
+    room_template: {
+      name: "Quick Layout",
+      data: [{ type: "Living Room", size: "Large", name: "Main Lounge" }],
+    },
+    should_optuna_run: false,
+    optuna_trial_count: 20,
+  };
 
   // helper to fetch and update data
+  const closeStream = () => {
+    if (eventSourceRef.current) {
+      eventSourceRef.current.close();
+      eventSourceRef.current = null;
+    }
+  };
+
+  useEffect(() => {
+    return () => {
+      closeStream();
+    };
+  }, []);
+
   const load = useCallback(async (request?: FormatV2Request, skipThrottle = false) => {
     const now = Date.now();
     if (inFlightRef.current) return;
@@ -40,19 +67,56 @@ const Home: React.FC = () => {
     inFlightRef.current = true;
     setLoading(true);
     setError(null);
+    setStatus("Submitting job...");
     try {
-      const data = request ? await formatFloorPlanV2(request) : await fetchFormattedPlan();
-      setSegments(formatResponseToSegments(data));
-      setRoomCenters(roomCentersFromCompactByRoom(data));
-      setLabels(compactRoomsToLabels(data));
-      setOpenings(compactRoomsToOpenings(data));
+      closeStream();
+      const submission = await submitFormatV2Job(request ?? defaultRequest);
+      setStatus(submission.message || `Job submitted (${submission.job_id}).`);
+
+      eventSourceRef.current = subscribeToJobEvents(
+        submission.job_id,
+        async (event) => {
+          setStatus(event.message ?? event.event ?? "Processing...");
+
+          if (
+            event.event === "success" ||
+            event.event === "time_out" ||
+            event.event === "fpg_low_score"
+          ) {
+            closeStream();
+            const state = await fetchFormatV2JobState(submission.job_id);
+            if (!state.result) {
+              setError(`Job ended with status ${state.status}, but no result was returned.`);
+              inFlightRef.current = false;
+              setLoading(false);
+              return;
+            }
+
+            setSegments(formatResultToSegments(state.result));
+            setRoomCenters(roomCentersFromResult(state.result));
+            setLabels(roomsToLabels(state.result));
+            setOpenings(roomsToOpenings(state.result));
+            setStatus(state.result.message || "Floor plan generated successfully.");
+            inFlightRef.current = false;
+            setLoading(false);
+          }
+        },
+        () => {
+          closeStream();
+          setError("Live updates disconnected. Check job status.");
+          inFlightRef.current = false;
+          setLoading(false);
+        },
+      );
     } catch (err) {
       const message = err instanceof Error ? err.message : "Failed to load formatted plan.";
       setError(message);
       console.error(err);
     } finally {
-      inFlightRef.current = false;
-      setLoading(false);
+      if (!eventSourceRef.current) {
+        inFlightRef.current = false;
+        setLoading(false);
+      }
     }
   }, []);
 
@@ -71,6 +135,7 @@ const Home: React.FC = () => {
         <div className="bg-amber-200 flex-1 min-w-0 p-2 flex flex-col gap-2">
           <div className="flex items-center gap-3">
             {loading && <span className="text-sm">Loading…</span>}
+            {status && <span className="text-xs text-slate-600">{status}</span>}
             {error && <span className="text-red-600 text-sm">{error}</span>}
           </div>
           <div className="flex-1 min-h-0">
