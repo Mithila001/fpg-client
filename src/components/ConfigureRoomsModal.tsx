@@ -2,19 +2,36 @@ import React, { useEffect, useMemo, useState } from "react";
 import type { FormatV2Request } from "../api/floorPlan";
 import { formatLengthFromCm, parseMetersInputToCm } from "../utils/units";
 
-type OptionalRoomType = "bathroom" | "bedroom" | "kitchen";
+type ConfigurableRoomType =
+  | "bedroom"
+  | "kitchen"
+  | "bathroom"
+  | "diningRoom"
+  | "garage"
+  | "veranda"
+  | "attachedBathroom";
 
-const roomLabels: Record<OptionalRoomType, string> = {
-  bathroom: "Bathroom",
+const roomLabels: Record<ConfigurableRoomType, string> = {
   bedroom: "Bedroom",
   kitchen: "Kitchen",
+  bathroom: "Bathroom",
+  diningRoom: "Dining Room",
+  garage: "Garage",
+  veranda: "Veranda",
+  attachedBathroom: "Attached Bathroom",
 };
 
-const roomSizes: Record<OptionalRoomType, string> = {
-  bathroom: "Small",
-  bedroom: "Medium",
-  kitchen: "Medium",
+const roomSizes: Record<ConfigurableRoomType, string> = {
+  bedroom: "regular",
+  kitchen: "regular",
+  bathroom: "small",
+  diningRoom: "regular",
+  garage: "regular",
+  veranda: "small",
+  attachedBathroom: "small",
 };
+
+const mandatoryRooms: ConfigurableRoomType[] = ["bedroom", "kitchen", "bathroom", "veranda"];
 
 export interface SubmittedRoomRequirements {
   payload: FormatV2Request;
@@ -40,15 +57,23 @@ const ConfigureRoomsModal: React.FC<ConfigureRoomsModalProps> = ({
   onClose,
   onSubmit,
 }) => {
-  const [selectedRooms, setSelectedRooms] = useState<Record<OptionalRoomType, boolean>>({
-    bathroom: false,
-    bedroom: false,
-    kitchen: false,
+  const [selectedRooms, setSelectedRooms] = useState<Record<ConfigurableRoomType, boolean>>({
+    bedroom: true,
+    kitchen: true,
+    bathroom: true,
+    veranda: true,
+    diningRoom: false,
+    garage: false,
+    attachedBathroom: false,
   });
-  const [roomCounts, setRoomCounts] = useState<Record<OptionalRoomType, number>>({
-    bathroom: 0,
-    bedroom: 0,
-    kitchen: 0,
+  const [roomCounts, setRoomCounts] = useState<Record<ConfigurableRoomType, number>>({
+    bedroom: 1,
+    kitchen: 1,
+    bathroom: 1,
+    veranda: 1,
+    diningRoom: 0,
+    garage: 0,
+    attachedBathroom: 0,
   });
   const [floorWidthInput, setFloorWidthInput] = useState<string>("");
   const [floorHeightInput, setFloorHeightInput] = useState<string>("");
@@ -58,8 +83,24 @@ const ConfigureRoomsModal: React.FC<ConfigureRoomsModalProps> = ({
     if (!isOpen) return;
 
     if (!initialRequirements) {
-      setSelectedRooms({ bathroom: false, bedroom: false, kitchen: false });
-      setRoomCounts({ bathroom: 0, bedroom: 0, kitchen: 0 });
+      setSelectedRooms({
+        bedroom: true,
+        kitchen: true,
+        bathroom: true,
+        veranda: true,
+        diningRoom: false,
+        garage: false,
+        attachedBathroom: false,
+      });
+      setRoomCounts({
+        bedroom: 1,
+        kitchen: 1,
+        bathroom: 1,
+        veranda: 1,
+        diningRoom: 0,
+        garage: 0,
+        attachedBathroom: 0,
+      });
       setFloorWidthInput("");
       setFloorHeightInput("");
       setSubmitStatus(null);
@@ -67,25 +108,40 @@ const ConfigureRoomsModal: React.FC<ConfigureRoomsModalProps> = ({
     }
 
     const entries = initialRequirements.payload.room_template.data;
-    const nextSelected: Record<OptionalRoomType, boolean> = {
-      bathroom: false,
+    const nextSelected: Record<ConfigurableRoomType, boolean> = {
       bedroom: false,
       kitchen: false,
+      bathroom: false,
+      veranda: false,
+      diningRoom: false,
+      garage: false,
+      attachedBathroom: false,
     };
-    const nextCounts: Record<OptionalRoomType, number> = {
-      bathroom: 0,
+    const nextCounts: Record<ConfigurableRoomType, number> = {
       bedroom: 0,
       kitchen: 0,
+      bathroom: 0,
+      veranda: 0,
+      diningRoom: 0,
+      garage: 0,
+      attachedBathroom: 0,
     };
 
     for (const item of entries) {
-      const normalized = item.type.trim().toLowerCase();
-      const maybeType = normalized as OptionalRoomType;
-      if (!(maybeType in roomLabels)) continue;
+      const normalized = item.type.trim() as ConfigurableRoomType;
+      if (!(normalized in roomLabels)) continue;
 
-      nextSelected[maybeType] = true;
-      nextCounts[maybeType] += 1;
+      nextSelected[normalized] = true;
+      nextCounts[normalized] += 1;
     }
+
+    // Ensure mandatory rooms are at least 1
+    mandatoryRooms.forEach((room) => {
+      nextSelected[room] = true;
+      if (nextCounts[room] < 1) {
+        nextCounts[room] = 1;
+      }
+    });
 
     setSelectedRooms(nextSelected);
     setRoomCounts(nextCounts);
@@ -97,7 +153,7 @@ const ConfigureRoomsModal: React.FC<ConfigureRoomsModalProps> = ({
   const hasValidLimits = maxUsableWidth !== null && maxUsableHeight !== null;
 
   const selectedRoomSummary = useMemo(() => {
-    const picked = (Object.keys(roomLabels) as OptionalRoomType[])
+    const picked = (Object.keys(roomLabels) as ConfigurableRoomType[])
       .filter((roomType) => selectedRooms[roomType])
       .map((roomType) => `${roomLabels[roomType]}: ${roomCounts[roomType]}`);
 
@@ -108,7 +164,9 @@ const ConfigureRoomsModal: React.FC<ConfigureRoomsModalProps> = ({
     return picked.join(" | ");
   }, [selectedRooms, roomCounts]);
 
-  const handleToggleRoom = (roomType: OptionalRoomType) => {
+  const handleToggleRoom = (roomType: ConfigurableRoomType) => {
+    if (mandatoryRooms.includes(roomType)) return;
+
     setSelectedRooms((prev) => {
       const nextSelected = !prev[roomType];
 
@@ -124,14 +182,17 @@ const ConfigureRoomsModal: React.FC<ConfigureRoomsModalProps> = ({
     });
   };
 
-  const handleCountChange = (roomType: OptionalRoomType, nextValue: string) => {
+  const handleCountChange = (roomType: ConfigurableRoomType, nextValue: string) => {
     const parsed = Number.parseInt(nextValue, 10);
+    const isMandatory = mandatoryRooms.includes(roomType);
+
     if (!Number.isFinite(parsed)) {
-      setRoomCounts((prev) => ({ ...prev, [roomType]: 0 }));
+      setRoomCounts((prev) => ({ ...prev, [roomType]: isMandatory ? 1 : 0 }));
       return;
     }
 
-    const bounded = Math.min(10, Math.max(0, parsed));
+    const minCount = isMandatory ? 1 : 0;
+    const bounded = Math.min(10, Math.max(minCount, parsed));
     setRoomCounts((prev) => ({ ...prev, [roomType]: bounded }));
   };
 
@@ -161,26 +222,26 @@ const ConfigureRoomsModal: React.FC<ConfigureRoomsModalProps> = ({
       return;
     }
 
-    const roomData: Array<{ type: string; size: string; name?: string }> = [
-      { type: "Living Room", size: "Large", name: "Main Lounge" },
-    ];
+    const roomData: Array<{ type: string; size: string; name?: string }> = [];
 
-    (Object.keys(roomLabels) as OptionalRoomType[]).forEach((roomType) => {
+    (Object.keys(roomLabels) as ConfigurableRoomType[]).forEach((roomType) => {
       if (!selectedRooms[roomType]) return;
-      const count = Math.max(0, roomCounts[roomType]);
+      const count = Math.max(mandatoryRooms.includes(roomType) ? 1 : 0, roomCounts[roomType]);
       for (let i = 1; i <= count; i += 1) {
-        const label = roomLabels[roomType];
         roomData.push({
-          type: label,
+          type: roomType,
           size: roomSizes[roomType],
-          name: `${label} ${i}`,
+          name: `${roomLabels[roomType]} ${i}`,
         });
       }
     });
 
+    const aspectRatio = floorHeightCm / floorWidthCm;
+
     const payload: FormatV2Request = {
       floor_width: floorWidthCm,
       floor_height: floorHeightCm,
+      aspect_ratio: aspectRatio,
       room_template: {
         name: "Custom Layout",
         data: roomData,
@@ -218,35 +279,60 @@ const ConfigureRoomsModal: React.FC<ConfigureRoomsModalProps> = ({
         <form onSubmit={handleSubmit} className="grid gap-4 px-6 py-5">
           <div className="rounded-md border border-slate-200 p-3">
             <h3 className="mb-3 text-sm font-semibold text-slate-800">Room Requirements</h3>
-            {(Object.keys(roomLabels) as OptionalRoomType[]).map((roomType) => (
-              <div
-                key={roomType}
-                className="grid grid-cols-[1fr_130px] items-center gap-3 border-b border-slate-100 py-2 last:border-b-0"
-              >
-                <label className="flex items-center gap-2 text-sm text-slate-700">
-                  <input
-                    type="checkbox"
-                    checked={selectedRooms[roomType]}
-                    onChange={() => handleToggleRoom(roomType)}
-                    className="h-4 w-4"
-                  />
-                  {roomLabels[roomType]}
-                </label>
-
+            
+            {/* Living Room (Static, Grayed Out) */}
+            <div className="grid grid-cols-[1fr_130px] items-center gap-3 border-b border-slate-100 py-2">
+              <label className="flex items-center gap-2 text-sm text-slate-400 cursor-not-allowed">
                 <input
-                  type="number"
-                  min={0}
-                  max={10}
-                  step={1}
-                  value={roomCounts[roomType]}
-                  onChange={(e) => handleCountChange(roomType, e.target.value)}
-                  disabled={!selectedRooms[roomType]}
-                  className="rounded border border-slate-300 px-3 py-2 text-sm disabled:bg-slate-100 disabled:text-slate-400"
+                  type="checkbox"
+                  checked={true}
+                  disabled={true}
+                  className="h-4 w-4 opacity-50 cursor-not-allowed"
                 />
-              </div>
-            ))}
+                Living Room <span className="text-xs text-slate-400">(Default)</span>
+              </label>
+
+              <input
+                type="number"
+                value={1}
+                disabled={true}
+                className="rounded border border-slate-200 bg-slate-50 px-3 py-2 text-sm text-slate-400 cursor-not-allowed"
+              />
+            </div>
+
+            {(Object.keys(roomLabels) as ConfigurableRoomType[]).map((roomType) => {
+              const isMandatory = mandatoryRooms.includes(roomType);
+              return (
+                <div
+                  key={roomType}
+                  className="grid grid-cols-[1fr_130px] items-center gap-3 border-b border-slate-100 py-2 last:border-b-0"
+                >
+                  <label className="flex items-center gap-2 text-sm text-slate-700">
+                    <input
+                      type="checkbox"
+                      checked={selectedRooms[roomType]}
+                      onChange={() => !isMandatory && handleToggleRoom(roomType)}
+                      disabled={isMandatory}
+                      className={`h-4 w-4 ${isMandatory ? 'opacity-50 cursor-not-allowed' : ''}`}
+                    />
+                    {roomLabels[roomType]} {isMandatory && <span className="text-xs text-amber-600">(Req)</span>}
+                  </label>
+
+                  <input
+                    type="number"
+                    min={isMandatory ? 1 : 0}
+                    max={10}
+                    step={1}
+                    value={roomCounts[roomType]}
+                    onChange={(e) => handleCountChange(roomType, e.target.value)}
+                    disabled={!selectedRooms[roomType]}
+                    className="rounded border border-slate-300 px-3 py-2 text-sm disabled:bg-slate-100 disabled:text-slate-400"
+                  />
+                </div>
+              );
+            })}
             <div className="mt-2 text-xs text-slate-600">
-              Living room is always included by default.
+              Living room is added by the server automatically. Required rooms must have at least 1.
             </div>
           </div>
 
