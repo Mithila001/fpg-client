@@ -1,45 +1,67 @@
-import React, { useState, useEffect } from "react";
+import React, { useState, useRef, useCallback, useEffect } from "react";
+import { useLocation } from "react-router-dom";
 import CoordinateCanvas from "../components/Konva/KonvaCanvas";
-import { fetchFormattedPlan, formatResponseToSegments, roomsToLabels } from "../api/floorPlan";
+import type { CoordinateCanvasHandle } from "../components/Konva/KonvaCanvas";
+import {
+  compactRoomsToLabels,
+  compactRoomsToOpenings,
+  fetchFormattedPlan,
+  formatFloorPlanV2,
+  formatResponseToSegments,
+  roomCentersFromCompactByRoom,
+  type FormatV2Request,
+} from "../api/floorPlan";
 import type { Coordinate, Label } from "../components/Konva/shapes/types";
+import type { CanvasOpening } from "../types";
+
+type HomeRouteState = {
+  generateRequest?: FormatV2Request;
+};
 
 const Home: React.FC = () => {
+  const location = useLocation();
+  const canvasRef = useRef<CoordinateCanvasHandle>(null);
   const [segments, setSegments] = useState<Coordinate[][] | null>(null);
   const [labels, setLabels] = useState<Label[] | null>(null);
+  const [roomCenters, setRoomCenters] = useState<Coordinate[] | null>(null);
+  const [openings, setOpenings] = useState<CanvasOpening[] | null>(null);
   const [loading, setLoading] = useState(false);
   const [error, setError] = useState<string | null>(null);
-  const [autoRefresh, setAutoRefresh] = useState(false);
+  const lastRequestAtRef = useRef(0);
+  const inFlightRef = useRef(false);
 
   // helper to fetch and update data
-  const load = async () => {
+  const load = useCallback(async (request?: FormatV2Request, skipThrottle = false) => {
+    const now = Date.now();
+    if (inFlightRef.current) return;
+    if (!skipThrottle && now - lastRequestAtRef.current < 2000) return;
+
+    lastRequestAtRef.current = now;
+    inFlightRef.current = true;
     setLoading(true);
     setError(null);
     try {
-      const data = await fetchFormattedPlan();
+      const data = request ? await formatFloorPlanV2(request) : await fetchFormattedPlan();
       setSegments(formatResponseToSegments(data));
-      setLabels(roomsToLabels(data.rooms));
+      setRoomCenters(roomCentersFromCompactByRoom(data));
+      setLabels(compactRoomsToLabels(data));
+      setOpenings(compactRoomsToOpenings(data));
     } catch (err) {
-      setError("Failed to load formatted plan. Is the backend running?");
+      const message = err instanceof Error ? err.message : "Failed to load formatted plan.";
+      setError(message);
       console.error(err);
     } finally {
+      inFlightRef.current = false;
       setLoading(false);
     }
-  };
-
-  // fetch formatted walls on component mount
-  useEffect(() => {
-    load();
   }, []);
 
-  // toggle auto-refresh loop
   useEffect(() => {
-    if (!autoRefresh) return;
+    const routeState = (location.state ?? null) as HomeRouteState | null;
+    if (!routeState?.generateRequest) return;
 
-    const interval = setInterval(() => {
-      load();
-    }, 6000);
-    return () => clearInterval(interval);
-  }, [autoRefresh]);
+    void load(routeState.generateRequest, true);
+  }, [location.state, load]);
 
   return (
     // ensure this page fills the available space and never scrolls
@@ -54,10 +76,12 @@ const Home: React.FC = () => {
           <div className="flex-1 min-h-0">
             {segments !== null && (
               <CoordinateCanvas
+                ref={canvasRef}
                 segments={segments}
                 labels={labels ?? undefined}
-                resolution={20}
-                wallThickness={8}
+                openings={openings ?? undefined}
+                pxPerCm={1}
+                wallThickness={6}
               />
             )}
           </div>
@@ -65,21 +89,23 @@ const Home: React.FC = () => {
 
         {/* Right*/}
         <div className="bg-green-200 w-64 flex-none p-8 flex flex-col gap-4">
-          <div className="flex items-center gap-2">
-            <label htmlFor="auto-refresh" className="text-sm">
-              Auto‑refresh
-            </label>
-            <input
-              id="auto-refresh"
-              type="checkbox"
-              checked={autoRefresh}
-              onChange={(e) => setAutoRefresh(e.target.checked)}
-              className="h-4 w-4"
-            />
+          <div className="text-xs text-gray-700">Rooms detected: {roomCenters?.length ?? 0}</div>
+          <button
+            onClick={() => void load()}
+            disabled={loading}
+            className="px-3 py-2 bg-emerald-600 text-white text-sm rounded hover:bg-emerald-700 disabled:opacity-50 disabled:cursor-not-allowed"
+          >
+            Get New Floor Plan
+          </button>
+          <div className="text-xs text-gray-700">
+            API calls are limited to once every 2 seconds.
           </div>
-          <div className="text-xs text-gray-600">
-            {autoRefresh && <span>Updating every 2 seconds…</span>}
-          </div>
+          <button
+            onClick={() => canvasRef.current?.reset()}
+            className="px-3 py-2 bg-blue-500 text-white text-sm rounded hover:bg-blue-600"
+          >
+            Reset View
+          </button>
           <div className="flex-1">Right Property Panel</div>
         </div>
       </div>

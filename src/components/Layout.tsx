@@ -24,6 +24,39 @@ const Layout: React.FC = () => {
                 Home
               </NavLink>
             </li>
+            <li>
+              <NavLink
+                to="/caves"
+                className={({ isActive }) =>
+                  `text-gray-600 dark:text-gray-300 hover:text-gray-900 dark:hover:text-white transition-colors` +
+                  (isActive ? " font-bold text-blue-600 dark:text-blue-400" : "")
+                }
+              >
+                Caves
+              </NavLink>
+            </li>
+            <li>
+              <NavLink
+                to="/input-plan"
+                className={({ isActive }) =>
+                  `text-gray-600 dark:text-gray-300 hover:text-gray-900 dark:hover:text-white transition-colors` +
+                  (isActive ? " font-bold text-blue-600 dark:text-blue-400" : "")
+                }
+              >
+                Input Plan
+              </NavLink>
+            </li>
+            <li>
+              <NavLink
+                to="/configure-rooms"
+                className={({ isActive }) =>
+                  `text-gray-600 dark:text-gray-300 hover:text-gray-900 dark:hover:text-white transition-colors` +
+                  (isActive ? " font-bold text-blue-600 dark:text-blue-400" : "")
+                }
+              >
+                Configure Rooms
+              </NavLink>
+            </li>
           </ul>
         </nav>
       </header>

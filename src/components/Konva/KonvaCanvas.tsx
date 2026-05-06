@@ -1,7 +1,10 @@
-import React, { useState, useEffect, useRef } from "react";
+import React, { useState, useEffect, useRef, forwardRef, useImperativeHandle } from "react";
 import { Stage, Layer, Circle, Text, Rect } from "react-konva";
-import { Grid, Wall, Labels } from "./shapes";
+import Konva from "konva";
+import { Grid, Wall, Labels, Openings } from "./shapes";
 import type { Coordinate, Label } from "./shapes";
+import { cmToPx } from "../../utils/units";
+import type { CanvasOpening } from "../../types";
 
 interface CoordinateCanvasProps {
   // optional collection of wall segments (each segment is a polyline)
@@ -10,61 +13,68 @@ interface CoordinateCanvasProps {
   points?: Coordinate[];
   // array of textual labels to place on the stage
   labels?: Label[];
-  // resolution multiplier; scales coordinates and grid spacing
-  resolution?: number;
+  // openings to draw on top of walls
+  openings?: CanvasOpening[];
+  // pixels-per-centimeter scale for converting internal cm coordinates to canvas px
+  pxPerCm?: number;
   // wall thickness in pixels
   wallThickness?: number;
 }
 
-const CoordinateCanvas: React.FC<CoordinateCanvasProps> = ({
-  segments,
-  points,
-  labels,
-  resolution,
-  wallThickness,
-}) => {
-  const scale = resolution ?? 1;
+export interface CoordinateCanvasHandle {
+  reset: () => void;
+}
 
-  // determine which geometry to render (flatten segments for debugging)
-  let effectivePoints: Coordinate[] = [];
-  if (segments && segments.length > 0) {
-    effectivePoints = segments.flat();
-  } else if (points && points.length > 0) {
-    effectivePoints = points;
-  }
+const CoordinateCanvas = forwardRef<CoordinateCanvasHandle, CoordinateCanvasProps>(
+  ({ segments, points, labels, openings, pxPerCm, wallThickness }, ref) => {
+    const scale = pxPerCm ?? 1;
 
-  // compute offset so the minimum coordinate isn't at the very edge
-  const margin = 100;
-  let offsetX = 0;
-  let offsetY = 0;
-  if (effectivePoints.length > 0) {
-    const minX = Math.min(...effectivePoints.map((p) => p.x));
-    const minY = Math.min(...effectivePoints.map((p) => p.y));
-    offsetX = margin - minX * scale;
-    offsetY = margin - minY * scale;
-  }
+    // determine which geometry to render (flatten segments for debugging)
+    let effectivePoints: Coordinate[] = [];
+    if (segments && segments.length > 0) {
+      effectivePoints = segments.flat();
+    } else if (points && points.length > 0) {
+      effectivePoints = points;
+    }
 
-  const scaledPoints = effectivePoints.map((p) => ({
-    x: p.x * scale + offsetX,
-    y: p.y * scale + offsetY,
-    label: p.label,
-  }));
+    // compute offset so the minimum coordinate isn't at the very edge
+    const margin = 100;
+    let offsetX = 0;
+    let offsetY = 0;
+    if (effectivePoints.length > 0) {
+      const minX = Math.min(...effectivePoints.map((p) => p.x));
+      const minY = Math.min(...effectivePoints.map((p) => p.y));
+      offsetX = margin - cmToPx(minX, scale);
+      offsetY = margin - cmToPx(minY, scale);
+    }
 
-  const scaledLabels: Label[] | undefined = labels
-    ? labels.map((l) => ({
-        x: l.x * scale + offsetX,
-        y: l.y * scale + offsetY,
-        text: l.text,
-        fontSize: l.fontSize,
-        color: l.color,
-      }))
-    : undefined;
+    const scaledPoints = effectivePoints.map((p) => ({
+      x: cmToPx(p.x, scale) + offsetX,
+      y: cmToPx(p.y, scale) + offsetY,
+      label: p.label,
+    }));
 
-  const containerRef = useRef<HTMLDivElement>(null);
-  const [dimensions, setDimensions] = useState({ width: 0, height: 0 });
+    const scaledLabels: Label[] | undefined = labels
+      ? labels.map((l) => ({
+          x: cmToPx(l.x, scale) + offsetX,
+          y: cmToPx(l.y, scale) + offsetY,
+          text: l.text,
+          fontSize: l.fontSize,
+          color: l.color,
+        }))
+      : undefined;
+
+    const containerRef = useRef<HTMLDivElement>(null);
+    const stageRef = useRef<Konva.Stage>(null);
+    const [dimensions, setDimensions] = useState({ width: 0, height: 0 });
+
+    // pan & zoom state
+    const [stageScale, setStageScale] = useState(1);
+    const [stageX, setStageX] = useState(0);
+    const [stageY, setStageY] = useState(0);
 
   // grid configuration
-  const baseGridSize = 50;
+  const baseGridSize = cmToPx(10, scale);
 
   // start with a simple scale-based grid size, but if we have geometry
   // compute a "dynamic" grid spacing so the number of cells between the
@@ -79,8 +89,8 @@ const CoordinateCanvas: React.FC<CoordinateCanvasProps> = ({
     const minX = Math.min(...effectivePoints.map((p) => p.x));
     const minY = Math.min(...effectivePoints.map((p) => p.y));
 
-    const rangeX = (maxX - minX) * scale;
-    const rangeY = (maxY - minY) * scale;
+    const rangeX = cmToPx(maxX - minX, scale);
+    const rangeY = cmToPx(maxY - minY, scale);
     const maxRange = Math.max(rangeX, rangeY);
 
     // how many grid cells do we want along the longest dimension?
@@ -92,6 +102,43 @@ const CoordinateCanvas: React.FC<CoordinateCanvasProps> = ({
     const maxSize = baseGridSize * scale * 5;
     gridSize = Math.min(maxSize, Math.max(minSize, dynamicSize));
   }
+
+  // pan & zoom handlers
+  const handleWheel = (e: Konva.KonvaEventObject<WheelEvent>) => {
+    e.evt.preventDefault();
+    const stage = stageRef.current;
+    if (!stage) return;
+
+    const oldScale = stageScale;
+    const pointerPos = stage.getPointerPosition();
+    if (!pointerPos) return;
+
+    const zoomSpeed = 0.1;
+    const direction = e.evt.deltaY > 0 ? -1 : 1;
+    const newScale = Math.min(3, Math.max(0.5, oldScale + direction * zoomSpeed));
+
+    // zoom centered on cursor
+    const newX = pointerPos.x - (pointerPos.x - stageX) * (newScale / oldScale);
+    const newY = pointerPos.y - (pointerPos.y - stageY) * (newScale / oldScale);
+
+    setStageScale(newScale);
+    setStageX(newX);
+    setStageY(newY);
+  };
+
+  const handleDragEnd = (e: Konva.KonvaEventObject<DragEvent>) => {
+    setStageX(e.target.x());
+    setStageY(e.target.y());
+  };
+
+  // expose reset method via ref
+  useImperativeHandle(ref, () => ({
+    reset: () => {
+      setStageScale(1);
+      setStageX(0);
+      setStageY(0);
+    },
+  }));
 
   // debug: log whenever dimensions state changes
   useEffect(() => {
@@ -130,7 +177,18 @@ const CoordinateCanvas: React.FC<CoordinateCanvasProps> = ({
     // use full size so parent resizing triggers ResizeObserver
     <div ref={containerRef} style={{ width: "100%", height: "100%" }} className="bg-red-200">
       {dimensions.width > 0 && (
-        <Stage width={Math.floor(dimensions.width)} height={Math.floor(dimensions.height)}>
+        <Stage
+          ref={stageRef}
+          width={Math.floor(dimensions.width)}
+          height={Math.floor(dimensions.height)}
+          draggable
+          scaleX={stageScale}
+          scaleY={stageScale}
+          x={stageX}
+          y={stageY}
+          onWheel={handleWheel}
+          onDragEnd={handleDragEnd}
+        >
           <Layer>
             {/* draw border around the entire canvas */}
             <Rect
@@ -143,7 +201,7 @@ const CoordinateCanvas: React.FC<CoordinateCanvasProps> = ({
             />
 
             {/* grid and labels */}
-            <Grid dimensions={dimensions} gridSize={gridSize} />
+            <Grid dimensions={dimensions} gridSize={gridSize} pxPerCm={scale} />
 
             {/* walls rendered using the new Wall shape */}
             {segments && segments.length > 0 ? (
@@ -151,8 +209,8 @@ const CoordinateCanvas: React.FC<CoordinateCanvasProps> = ({
                 <Wall
                   key={`seg-${idx}`}
                   points={seg.map((p) => ({
-                    x: p.x * scale + offsetX,
-                    y: p.y * scale + offsetY,
+                    x: cmToPx(p.x, scale) + offsetX,
+                    y: cmToPx(p.y, scale) + offsetY,
                   }))}
                   thickness={wallThickness ?? 6}
                 />
@@ -163,6 +221,11 @@ const CoordinateCanvas: React.FC<CoordinateCanvasProps> = ({
 
             {/* custom text labels */}
             {scaledLabels && <Labels labels={scaledLabels} />}
+
+            {/* openings rendered as architectural symbols */}
+            {openings && openings.length > 0 && (
+              <Openings openings={openings} pxPerCm={scale} offsetX={offsetX} offsetY={offsetY} />
+            )}
 
             {/* point markers / labels (keep for debugging) */}
             {scaledPoints.map((point, index) => (
@@ -192,6 +255,7 @@ const CoordinateCanvas: React.FC<CoordinateCanvasProps> = ({
       )}
     </div>
   );
-};
+}
+);
 
 export default CoordinateCanvas;
