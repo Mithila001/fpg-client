@@ -45,6 +45,7 @@ interface ConfigureRoomsModalProps {
   maxUsableWidth: number | null;
   maxUsableHeight: number | null;
   initialRequirements?: SubmittedRoomRequirements | null;
+  aspectRatio: string;
   onClose: () => void;
   onSubmit: (requirements: SubmittedRoomRequirements) => void;
 }
@@ -54,6 +55,7 @@ const ConfigureRoomsModal: React.FC<ConfigureRoomsModalProps> = ({
   maxUsableWidth,
   maxUsableHeight,
   initialRequirements,
+  aspectRatio,
   onClose,
   onSubmit,
 }) => {
@@ -77,6 +79,7 @@ const ConfigureRoomsModal: React.FC<ConfigureRoomsModalProps> = ({
   });
   const [floorWidthInput, setFloorWidthInput] = useState<string>("");
   const [floorHeightInput, setFloorHeightInput] = useState<string>("");
+  const [globalRoomSize, setGlobalRoomSize] = useState<string>("regular");
   const [submitStatus, setSubmitStatus] = useState<string | null>(null);
 
   useEffect(() => {
@@ -230,13 +233,11 @@ const ConfigureRoomsModal: React.FC<ConfigureRoomsModalProps> = ({
       for (let i = 1; i <= count; i += 1) {
         roomData.push({
           type: roomType,
-          size: roomSizes[roomType],
+          size: globalRoomSize,
           name: `${roomLabels[roomType]} ${i}`,
         });
       }
     });
-
-    const aspectRatio = floorHeightCm / floorWidthCm;
 
     const payload: FormatV2Request = {
       floor_width: floorWidthCm,
@@ -280,6 +281,19 @@ const ConfigureRoomsModal: React.FC<ConfigureRoomsModalProps> = ({
           <div className="rounded-md border border-slate-200 p-3">
             <h3 className="mb-3 text-sm font-semibold text-slate-800">Room Requirements</h3>
             
+            <div className="mb-4 flex items-center justify-between border-b border-slate-200 pb-3">
+              <span className="text-sm text-slate-700">Global Room Size</span>
+              <select
+                value={globalRoomSize}
+                onChange={(e) => setGlobalRoomSize(e.target.value)}
+                className="rounded border border-slate-300 px-3 py-1.5 text-sm bg-white"
+              >
+                <option value="small">Small</option>
+                <option value="regular">Regular</option>
+                <option value="large">Large</option>
+              </select>
+            </div>
+
             {/* Living Room (Static, Grayed Out) */}
             <div className="grid grid-cols-[1fr_130px] items-center gap-3 border-b border-slate-100 py-2">
               <label className="flex items-center gap-2 text-sm text-slate-400 cursor-not-allowed">

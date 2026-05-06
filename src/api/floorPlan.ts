@@ -28,17 +28,39 @@ export interface FormatV2JobSubmission {
   message: string;
 }
 
+export const FPG_TRIAL_COUNT = 500;
+
 export const submitFormatV2Job = async (
   request: FormatV2Request,
 ): Promise<FormatV2JobSubmission> => {
-  const response = await client.post<FormatV2JobSubmission>("/algorithms/format/v2", request);
+  const payload = {
+    ...request,
+    optuna_trial_count: FPG_TRIAL_COUNT,
+  };
+  const response = await client.post<FormatV2JobSubmission>("/algorithms/format/v2", payload);
   return response.data;
 };
 
 export const fetchFormatV2JobState = async (
   jobId: string,
 ): Promise<JobStateResponse<FormatV2Result>> => {
-  return fetchJobState<FormatV2Result>(jobId);
+  const state = await fetchJobState<any>(jobId);
+  
+  if (state.result && typeof state.result === 'object' && 'result' in state.result) {
+    if (state.result.result && state.result.result.union_results) {
+      state.result = state.result.result;
+    }
+  }
+
+  if (!state.result && state.events && Array.isArray(state.events)) {
+    const successEvent = state.events.find((e: any) => e.event === 'success');
+    if (successEvent?.data?.result) {
+      state.result = successEvent.data.result;
+      state.status = 'COMPLETED'; // Force status to COMPLETED if success event exists
+    }
+  }
+
+  return state as JobStateResponse<FormatV2Result>;
 };
 
 const openingTypeToKind = (openingType: string): "window" | "door" => {

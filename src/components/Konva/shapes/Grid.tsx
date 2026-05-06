@@ -3,36 +3,44 @@ import { Line, Text } from "react-konva";
 import { formatLengthFromCm, pxToCm } from "../../../utils/units";
 
 interface GridProps {
-  dimensions: { width: number; height: number };
+  startX: number;
+  endX: number;
+  startY: number;
+  endY: number;
   gridSize: number;
   pxPerCm: number;
 }
 
-const Grid: React.FC<GridProps> = ({ dimensions, gridSize, pxPerCm }) => {
+const Grid: React.FC<GridProps> = ({ startX, endX, startY, endY, gridSize, pxPerCm }) => {
   const elems: React.ReactNode[] = [];
-  for (let x = 0; x <= dimensions.width; x += gridSize) {
+  
+  // Snap start points to the grid size
+  const startGridX = Math.floor(startX / gridSize) * gridSize;
+  const startGridY = Math.floor(startY / gridSize) * gridSize;
+
+  for (let x = startGridX; x <= endX; x += gridSize) {
     elems.push(
-      <Line key={`v${x}`} points={[x, 0, x, dimensions.height]} stroke="#e0e0e0" strokeWidth={1} />,
+      <Line key={`v${x}`} points={[x, startY, x, endY]} stroke="#e0e0e0" strokeWidth={1} />,
     );
     elems.push(
       <Text
         key={`lx${x}`}
         x={x + 2}
-        y={2}
+        y={startY + 2}
         text={formatLengthFromCm(pxToCm(x, pxPerCm), 1)}
         fontSize={10}
         fill="#999"
       />,
     );
   }
-  for (let y = 0; y <= dimensions.height; y += gridSize) {
+  for (let y = startGridY; y <= endY; y += gridSize) {
     elems.push(
-      <Line key={`h${y}`} points={[0, y, dimensions.width, y]} stroke="#e0e0e0" strokeWidth={1} />,
+      <Line key={`h${y}`} points={[startX, y, endX, y]} stroke="#e0e0e0" strokeWidth={1} />,
     );
     elems.push(
       <Text
         key={`ly${y}`}
-        x={2}
+        x={startX + 2}
         y={y + 2}
         text={formatLengthFromCm(pxToCm(y, pxPerCm), 1)}
         fontSize={10}

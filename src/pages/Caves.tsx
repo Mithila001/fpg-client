@@ -97,6 +97,7 @@ const Caves: React.FC = () => {
   const [floorPlanEvents, setFloorPlanEvents] = useState<JobEventPayload[]>([]);
   const [floorPlanJobId, setFloorPlanJobId] = useState<string | null>(null);
   const floorPlanEventSourceRef = useRef<EventSource | null>(null);
+  const [aspectRatio, setAspectRatio] = useState<string>("1:1");
 
   const orderedKeys = useMemo(() => KEYS.slice(0, borderCount), [borderCount]);
 
@@ -648,6 +649,22 @@ const Caves: React.FC = () => {
                 Step B: Rooms and Generation
               </h2>
 
+              <label className="mb-3 flex flex-col gap-1 text-xs text-slate-700">
+                Target Aspect Ratio
+                <select
+                  value={aspectRatio}
+                  onChange={(e) => setAspectRatio(e.target.value)}
+                  disabled={!buildableRectangleSize || isRunningAlgorithm || isGeneratingFloorPlan}
+                  className="rounded border border-slate-300 px-3 py-2 text-sm disabled:bg-slate-100 disabled:text-slate-400"
+                >
+                  <option value="1:1">1:1</option>
+                  <option value="4:3">4:3</option>
+                  <option value="3:4">3:4</option>
+                  <option value="1:1.6">1:1.6</option>
+                  <option value="1.6:1">1.6:1</option>
+                </select>
+              </label>
+
               <button
                 onClick={handleOpenConfigureRooms}
                 disabled={!buildableRectangleSize || isRunningAlgorithm || isGeneratingFloorPlan}
@@ -710,6 +727,7 @@ const Caves: React.FC = () => {
         maxUsableWidth={buildableRectangleSize?.width ?? null}
         maxUsableHeight={buildableRectangleSize?.height ?? null}
         initialRequirements={submittedRequirements}
+        aspectRatio={aspectRatio}
         onClose={() => setIsRoomsModalOpen(false)}
         onSubmit={handleRoomSubmit}
       />
