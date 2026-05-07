@@ -467,7 +467,10 @@ const Caves: React.FC = () => {
     setRoomCenters(null);
 
     try {
-      const submission = await submitFormatV2Job(submittedRequirements.payload);
+      const submission = await submitFormatV2Job({
+        ...submittedRequirements.payload,
+        aspect_ratio: aspectRatio,
+      });
       setFloorPlanJobId(submission.job_id);
       setFloorPlanStatus(submission.message || `Floor plan job submitted (${submission.job_id}).`);
 
@@ -670,7 +673,16 @@ const Caves: React.FC = () => {
                 Target Aspect Ratio
                 <select
                   value={aspectRatio}
-                  onChange={(e) => setAspectRatio(e.target.value)}
+                  onChange={(e) => {
+                    const val = e.target.value;
+                    setAspectRatio(val);
+                    if (submittedRequirements) {
+                      setSubmittedRequirements({
+                        ...submittedRequirements,
+                        payload: { ...submittedRequirements.payload, aspect_ratio: val },
+                      });
+                    }
+                  }}
                   disabled={!buildableRectangleSize || isRunningAlgorithm || isGeneratingFloorPlan}
                   className="rounded border border-slate-300 px-3 py-2 text-sm disabled:bg-slate-100 disabled:text-slate-400"
                 >
