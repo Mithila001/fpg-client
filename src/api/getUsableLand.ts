@@ -20,11 +20,19 @@ export interface BuildableSpaceRequest {
   min_height?: number;
 }
 
+export interface BuildableRectangleSides {
+  front: [UsableLandPoint, UsableLandPoint];
+  back: [UsableLandPoint, UsableLandPoint];
+  left: [UsableLandPoint, UsableLandPoint];
+  right: [UsableLandPoint, UsableLandPoint];
+}
+
 export interface BuildableRectangle {
   vertices: UsableLandPoint[];
   width: number;
   height: number;
   area: number;
+  sides?: BuildableRectangleSides;
 }
 
 export interface SegmentCategory {

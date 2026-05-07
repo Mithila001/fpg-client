@@ -15,6 +15,7 @@ interface CavesCanvasProps {
     roadMode: "idle" | "placing";
     placedRoad: RoadPlacement | null;
     buildableRectangle: UsableLandPoint[] | null;
+    buildableRectangleSides: any; // Using any for simplicity as it's a pass-through
     shrunkBoundary: UsableLandPoint[] | null;
   };
   editActions: {
@@ -43,6 +44,7 @@ const CavesCanvas: React.FC<CavesCanvasProps> = ({ mode, editState, editActions,
         roadMode={editState.roadMode}
         placedRoad={editState.placedRoad}
         buildableRectangle={editState.buildableRectangle}
+        buildableRectangleSides={editState.buildableRectangleSides}
         shrunkBoundary={editState.shrunkBoundary}
         onAddBorderLine={editActions.onAddBorderLine}
         onRemoveBorderLine={editActions.onRemoveBorderLine}

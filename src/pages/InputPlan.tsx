@@ -16,6 +16,7 @@ import {
   type BuildableSpaceRequest,
   type UsableLandPoint,
   type UsableLandRoadConnectedSegment,
+  type BuildableRectangleSides,
 } from "../api/getUsableLand.ts";
 import { subscribeToJobEvents } from "../api/client";
 import { formatAreaFromCm2, formatLengthFromCm, parseAreaM2InputToCm2 } from "../utils/units";
@@ -65,6 +66,7 @@ const InputPlan: React.FC = () => {
     UsableLandPoint[] | null
   >(null);
   const [shrunkBoundary, setShrunkBoundary] = useState<UsableLandPoint[] | null>(null);
+  const [buildableRectangleSides, setBuildableRectangleSides] = useState<BuildableRectangleSides | null>(null);
   const [buildableRectangleSize, setBuildableRectangleSize] = useState<{
     width: number;
     height: number;
@@ -76,6 +78,7 @@ const InputPlan: React.FC = () => {
   const clearAlgorithmResultState = () => {
     setBuildableRectangleVertices(null);
     setShrunkBoundary(null);
+    setBuildableRectangleSides(null);
     setBuildableRectangleSize(null);
     setRunAlgoStatus(null);
   };
@@ -178,13 +181,15 @@ const InputPlan: React.FC = () => {
       const nextBoundary = result.shrunk_boundary ?? [];
       const nextRectangleWidth = result.buildable_rectangle?.width ?? null;
       const nextRectangleHeight = result.buildable_rectangle?.height ?? null;
-      
+      const nextSides = result.buildable_rectangle?.sides ?? null;
+
       const currentArea = calculatePolygonArea(points, KEYS.slice(0, borderCount));
-      
+
       // Catch backend geometry inversion bug where setbacks > plot size
       if (result.buildable_rectangle && result.buildable_rectangle.area > currentArea * 1.05) {
         setBuildableRectangleVertices(null);
         setShrunkBoundary(null);
+        setBuildableRectangleSides(null);
         setBuildableRectangleSize(null);
         setRunAlgoStatus("Error: The plot is too small for the required setbacks. Please apply a larger target area.");
         setIsRunningAlgorithm(false);
@@ -193,6 +198,7 @@ const InputPlan: React.FC = () => {
 
       setBuildableRectangleVertices(nextRectangle.length > 0 ? nextRectangle : null);
       setShrunkBoundary(nextBoundary.length > 0 ? nextBoundary : null);
+      setBuildableRectangleSides(nextSides);
       setBuildableRectangleSize(
         nextRectangleWidth !== null && nextRectangleHeight !== null
           ? { width: nextRectangleWidth, height: nextRectangleHeight }
@@ -208,6 +214,7 @@ const InputPlan: React.FC = () => {
       const message = error instanceof Error ? error.message : "Unable to run algorithm.";
       setBuildableRectangleVertices(null);
       setShrunkBoundary(null);
+      setBuildableRectangleSides(null);
       setBuildableRectangleSize(null);
       setRunAlgoStatus(`Failed to run algorithm: ${message}`);
     } finally {
@@ -344,6 +351,7 @@ const InputPlan: React.FC = () => {
         maxUsableWidth: buildableRectangleSize.width,
         maxUsableHeight: buildableRectangleSize.height,
         buildableRectangleVertices,
+        buildableRectangleSides,
         shrunkBoundary,
       },
     });
@@ -362,6 +370,7 @@ const InputPlan: React.FC = () => {
               roadMode={roadMode}
               placedRoad={placedRoads[0] ?? null}
               buildableRectangle={buildableRectangleVertices}
+              buildableRectangleSides={buildableRectangleSides}
               shrunkBoundary={shrunkBoundary}
               onAddBorderLine={addBorderLine}
               onRemoveBorderLine={removeBorderLine}

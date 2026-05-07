@@ -13,7 +13,12 @@ import {
   type BuildableSpaceRequest,
   type UsableLandPoint,
   type UsableLandRoadConnectedSegment,
+  type BuildableRectangleSides,
 } from "../api/getUsableLand";
+import {
+  fetchRoomSizeConstraints,
+  type RoomSizeConstraint,
+} from "../api/algorithms";
 import {
   submitFormatV2Job,
   fetchFormatV2JobState,
@@ -75,6 +80,7 @@ const Caves: React.FC = () => {
     UsableLandPoint[] | null
   >(null);
   const [shrunkBoundary, setShrunkBoundary] = useState<UsableLandPoint[] | null>(null);
+  const [buildableRectangleSides, setBuildableRectangleSides] = useState<BuildableRectangleSides | null>(null);
   const [buildableRectangleSize, setBuildableRectangleSize] = useState<{
     width: number;
     height: number;
@@ -85,6 +91,7 @@ const Caves: React.FC = () => {
   const [isRoomsModalOpen, setIsRoomsModalOpen] = useState(false);
   const [submittedRequirements, setSubmittedRequirements] =
     useState<SubmittedRoomRequirements | null>(null);
+  const [roomSizeConstraints, setRoomSizeConstraints] = useState<RoomSizeConstraint[]>([]);
 
   const [segments, setSegments] = useState<Coordinate[][] | null>(null);
   const [labels, setLabels] = useState<Label[] | null>(null);
@@ -118,6 +125,7 @@ const Caves: React.FC = () => {
   const clearAlgorithmResultState = () => {
     setBuildableRectangleVertices(null);
     setShrunkBoundary(null);
+    setBuildableRectangleSides(null);
     setBuildableRectangleSize(null);
     setRunAlgoStatus(null);
   };
@@ -182,7 +190,16 @@ const Caves: React.FC = () => {
   };
 
   useEffect(() => {
+    let cancelled = false;
+    fetchRoomSizeConstraints()
+      .then((data) => {
+        if (!cancelled) setRoomSizeConstraints(data);
+      })
+      .catch(() => {
+        // constraints unavailable — feasibility will show "unknown"
+      });
     return () => {
+      cancelled = true;
       closeBuildableStream();
       stopBuildablePolling();
       closeFloorPlanStream();
@@ -291,9 +308,11 @@ const Caves: React.FC = () => {
       const nextBoundary = result.shrunk_boundary ?? [];
       const nextRectangleWidth = result.buildable_rectangle?.width ?? null;
       const nextRectangleHeight = result.buildable_rectangle?.height ?? null;
+      const nextSides = result.buildable_rectangle?.sides ?? null;
 
       setBuildableRectangleVertices(nextRectangle.length > 0 ? nextRectangle : null);
       setShrunkBoundary(nextBoundary.length > 0 ? nextBoundary : null);
+      setBuildableRectangleSides(nextSides);
       setBuildableRectangleSize(
         nextRectangleWidth !== null && nextRectangleHeight !== null
           ? { width: nextRectangleWidth, height: nextRectangleHeight }
@@ -309,6 +328,7 @@ const Caves: React.FC = () => {
       const message = error instanceof Error ? error.message : "Unable to finalize algorithm.";
       setBuildableRectangleVertices(null);
       setShrunkBoundary(null);
+      setBuildableRectangleSides(null);
       setBuildableRectangleSize(null);
       setRunAlgoStatus(`Failed to run algorithm: ${message}`);
     } finally {
@@ -507,6 +527,7 @@ const Caves: React.FC = () => {
                 roadMode,
                 placedRoad: placedRoads[0] ?? null,
                 buildableRectangle: buildableRectangleVertices,
+                buildableRectangleSides,
                 shrunkBoundary,
               }}
               editActions={{
@@ -728,6 +749,7 @@ const Caves: React.FC = () => {
         maxUsableHeight={buildableRectangleSize?.height ?? null}
         initialRequirements={submittedRequirements}
         aspectRatio={aspectRatio}
+        roomSizeConstraints={roomSizeConstraints}
         onClose={() => setIsRoomsModalOpen(false)}
         onSubmit={handleRoomSubmit}
       />

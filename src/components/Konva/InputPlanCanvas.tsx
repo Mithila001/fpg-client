@@ -1,5 +1,5 @@
 import React, { useCallback, useEffect, useMemo, useRef, useState } from "react";
-import { Circle, Layer, Line, Stage, Text } from "react-konva";
+import { Circle, Layer, Line, Rect, Stage, Text } from "react-konva";
 import Konva from "konva";
 import { formatLengthFromCm, cmToM, mToCm } from "../../utils/units";
 import {
@@ -7,6 +7,7 @@ import {
   findNearestBoundarySegment,
   type RoadPlacement,
 } from "./utils/geometry";
+import type { BuildableRectangleSides } from "../../api/getUsableLand";
 
 export type CornerKey = "A" | "B" | "C" | "D" | "E" | "F";
 
@@ -24,6 +25,7 @@ interface InputPlanCanvasProps {
   roadMode?: "idle" | "placing";
   placedRoad?: RoadPlacement | null;
   buildableRectangle?: RoomPoint[] | null;
+  buildableRectangleSides?: BuildableRectangleSides | null;
   shrunkBoundary?: RoomPoint[] | null;
   onAddBorderLine?: () => void;
   onRemoveBorderLine?: () => void;
@@ -37,10 +39,10 @@ const PADDING = 24;
 const MIN_EDGE = 24;
 const DEFAULT_WIDTH = 900;
 const DEFAULT_HEIGHT = 620;
-const ROAD_WIDTH = 30;
-const ROAD_LENGTH = 1000;
-const ROAD_GAP = 6;
-const ROAD_SNAP_THRESHOLD = 36;
+const ROAD_WIDTH = 750; // Realistic road width (7.5m)
+const ROAD_LENGTH = 5000; // Longer road to ensure coverage
+const ROAD_GAP = 12; // Gap from plot boundary
+const ROAD_SNAP_THRESHOLD = 60; // Increased snap threshold for wider roads
 const FIT_PADDING = 36;
 const MIN_VIEW_SCALE = 5;
 const MAX_VIEW_SCALE = 1000;
@@ -114,6 +116,14 @@ const isValidPolygon = (points: RoomPoints, orderedKeys: CornerKey[]): boolean =
   return isConvexPolygon(points, orderedKeys);
 };
 
+const LABEL_STYLE = {
+  bg: "#1e293b", // Slate 800
+  text: "#ffffff",
+  paddingX: 10,
+  paddingY: 6,
+  cornerRadius: 4,
+};
+
 const InputPlanCanvas: React.FC<InputPlanCanvasProps> = ({
   points,
   borderCount,
@@ -121,6 +131,7 @@ const InputPlanCanvas: React.FC<InputPlanCanvasProps> = ({
   roadMode = "idle",
   placedRoad = null,
   buildableRectangle = null,
+  buildableRectangleSides = null,
   shrunkBoundary = null,
   onAddBorderLine,
   onRemoveBorderLine,
@@ -192,6 +203,12 @@ const InputPlanCanvas: React.FC<InputPlanCanvasProps> = ({
 
   const roadToLinePoints = (roadPolygon: RoomPoint[]): number[] =>
     roadPolygon.flatMap((point) => [cmToM(point.x), cmToM(point.y)]);
+
+  // Helper to get midpoint of a segment
+  const getMidpoint = (p1: RoomPoint, p2: RoomPoint) => ({
+    x: cmToM((p1.x + p2.x) / 2),
+    y: cmToM((p1.y + p2.y) / 2),
+  });
 
   const buildableRectanglePoints = useMemo(() => {
     if (!buildableRectangle || buildableRectangle.length < 3) return null;
@@ -419,37 +436,92 @@ const InputPlanCanvas: React.FC<InputPlanCanvasProps> = ({
       >
         <Layer>
           {placedRoadPolygon && (
-            <Line
-              points={roadToLinePoints(placedRoadPolygon)}
-              closed
-              fill="#475569"
-              stroke="#1e293b"
-              strokeWidth={2 / stageScale}
-            />
+            <React.Fragment>
+              <Line
+                points={roadToLinePoints(placedRoadPolygon)}
+                closed
+                fill="#334155" // Slate 700 - Asphalt
+                stroke="#1e293b"
+                strokeWidth={1 / stageScale}
+              />
+              {/* Road Center Line */}
+              <Line
+                points={roadToLinePoints(placedRoadPolygon).slice(0, 4)} // Approximation for center line
+                stroke="#ffffff88"
+                strokeWidth={4 / stageScale}
+                dash={[20 / stageScale, 20 / stageScale]}
+                opacity={0.5}
+              />
+            </React.Fragment>
           )}
 
           {previewRoadPolygon && (
             <Line
               points={roadToLinePoints(previewRoadPolygon)}
               closed
-              fill="#64748b88"
-              stroke="#334155"
+              fill="#47556944"
+              stroke="#475569"
               strokeWidth={2 / stageScale}
               dash={[8 / stageScale, 6 / stageScale]}
             />
           )}
 
-          <Line points={polygon} closed stroke="#0f172a" strokeWidth={6 / stageScale} fill="#dbeafe" />
+          <Line points={polygon} closed stroke="#0f172a" strokeWidth={6 / stageScale} fill="#f1f5f9" />
 
           {buildableRectanglePoints && (
             <Line
               points={buildableRectanglePoints}
               closed
-              fill="#dc262633"
-              stroke="#dc2626"
+              fill="#ef444411"
+              stroke="#ef4444"
               strokeWidth={3 / stageScale}
             />
           )}
+
+          {buildableRectangleSides &&
+            typeof buildableRectangleSides === "object" &&
+            Object.keys(buildableRectangleSides).length > 0 && (
+              <React.Fragment>
+                {(Object.entries(buildableRectangleSides) as [string, [RoomPoint, RoomPoint]][]).map(
+                  ([sideName, points_pair]) => {
+                    if (!Array.isArray(points_pair) || points_pair.length < 2) return null;
+                    const { x: mx, y: my } = getMidpoint(points_pair[0], points_pair[1]);
+                    const label = sideName.toUpperCase();
+                    
+                    const fontSize = 13 / stageScale;
+                    const textWidth = label.length * 8.5; // Approximation
+                    const width = (textWidth + LABEL_STYLE.paddingX * 2) / stageScale;
+                    const height = (16 + LABEL_STYLE.paddingY * 2) / stageScale;
+                    
+                    return (
+                      <React.Fragment key={`side-grp-${sideName}`}>
+                        <Rect
+                          x={mx - width / 2}
+                          y={my - height / 2}
+                          width={width}
+                          height={height}
+                          fill={LABEL_STYLE.bg}
+                          cornerRadius={LABEL_STYLE.cornerRadius / stageScale}
+                          shadowColor="black"
+                          shadowBlur={4 / stageScale}
+                          shadowOpacity={0.2}
+                          shadowOffset={{ x: 1 / stageScale, y: 1 / stageScale }}
+                        />
+                        <Text
+                          x={mx - (textWidth / 2) / stageScale}
+                          y={my - 8 / stageScale}
+                          text={label}
+                          fontSize={fontSize}
+                          fontStyle="bold"
+                          fill={LABEL_STYLE.text}
+                          align="center"
+                        />
+                      </React.Fragment>
+                    );
+                  },
+                )}
+              </React.Fragment>
+            )}
 
           {shrunkBoundaryPoints && (
             <Line

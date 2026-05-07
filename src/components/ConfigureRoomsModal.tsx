@@ -1,5 +1,6 @@
 import React, { useEffect, useMemo, useState } from "react";
 import type { FormatV2Request } from "../api/floorPlan";
+import type { RoomSizeConstraint } from "../api/algorithms";
 import { formatLengthFromCm, parseMetersInputToCm } from "../utils/units";
 
 type ConfigurableRoomType =
@@ -33,6 +34,8 @@ const roomSizes: Record<ConfigurableRoomType, string> = {
 
 const mandatoryRooms: ConfigurableRoomType[] = ["bedroom", "kitchen", "bathroom", "veranda"];
 
+type FeasibilityTag = "good" | "tight" | "impossible" | "unknown";
+
 export interface SubmittedRoomRequirements {
   payload: FormatV2Request;
   roomSummary: string;
@@ -46,6 +49,7 @@ interface ConfigureRoomsModalProps {
   maxUsableHeight: number | null;
   initialRequirements?: SubmittedRoomRequirements | null;
   aspectRatio: string;
+  roomSizeConstraints: RoomSizeConstraint[];
   onClose: () => void;
   onSubmit: (requirements: SubmittedRoomRequirements) => void;
 }
@@ -56,6 +60,7 @@ const ConfigureRoomsModal: React.FC<ConfigureRoomsModalProps> = ({
   maxUsableHeight,
   initialRequirements,
   aspectRatio,
+  roomSizeConstraints,
   onClose,
   onSubmit,
 }) => {
@@ -104,8 +109,9 @@ const ConfigureRoomsModal: React.FC<ConfigureRoomsModalProps> = ({
         garage: 0,
         attachedBathroom: 0,
       });
-      setFloorWidthInput("");
-      setFloorHeightInput("");
+      // Step A: auto-populate floor dimensions from buildable rectangle
+      setFloorWidthInput(maxUsableWidth !== null ? (maxUsableWidth / 100).toFixed(2) : "");
+      setFloorHeightInput(maxUsableHeight !== null ? (maxUsableHeight / 100).toFixed(2) : "");
       setSubmitStatus(null);
       return;
     }
@@ -154,6 +160,82 @@ const ConfigureRoomsModal: React.FC<ConfigureRoomsModalProps> = ({
   }, [isOpen, initialRequirements]);
 
   const hasValidLimits = maxUsableWidth !== null && maxUsableHeight !== null;
+
+  // ─── Feasibility ────────────────────────────────────────────────────────────
+  // API unit convention: 10 API units = 1 metre, so 1 API unit = 10 cm.
+  // Therefore: 1 API_unit² = 100 cm²  →  min_area_cm² = min_area_api * 100
+  // maxUsableWidth / maxUsableHeight arrive in cm from the buildable-space API.
+
+  const feasibility = useMemo<FeasibilityTag>(() => {
+    if (roomSizeConstraints.length === 0) return "unknown";
+
+    const floorWidthCm = parseMetersInputToCm(floorWidthInput);
+    const floorHeightCm = parseMetersInputToCm(floorHeightInput);
+    if (!floorWidthCm || !floorHeightCm || floorWidthCm <= 0 || floorHeightCm <= 0)
+      return "unknown";
+
+    const buildableAreaCm2 = floorWidthCm * floorHeightCm;
+
+    // Build a lookup: "type:size" -> min_area (in API units²)
+    const lookup = new Map<string, number>();
+    for (const c of roomSizeConstraints) {
+      lookup.set(`${c.type}:${c.size}`, c.min_area);
+    }
+
+    // Server always adds 1 livingRoom — include it in the estimate
+    const livingRoomApiMin = lookup.get(`livingRoom:${globalRoomSize}`) ?? 0;
+    let totalApiUnits2 = livingRoomApiMin;
+
+    // All selected (and mandatory) configurable rooms
+    (Object.keys(roomLabels) as ConfigurableRoomType[]).forEach((roomType) => {
+      if (!selectedRooms[roomType]) return;
+      const count = roomCounts[roomType];
+      if (count <= 0) return;
+      const roomApiMin = lookup.get(`${roomType}:${globalRoomSize}`) ?? 0;
+      totalApiUnits2 += roomApiMin * count;
+    });
+
+    // Convert API units² → cm²
+    const totalMinAreaCm2 = totalApiUnits2 * 100;
+
+    if (totalMinAreaCm2 > buildableAreaCm2) return "impossible";
+    if (totalMinAreaCm2 > buildableAreaCm2 * 0.75) return "tight";
+    return "good";
+  }, [
+    roomSizeConstraints,
+    selectedRooms,
+    roomCounts,
+    globalRoomSize,
+    floorWidthInput,
+    floorHeightInput,
+  ]);
+
+  const feasibilityConfig: Record<
+    FeasibilityTag,
+    { label: string; pillClass: string; dotClass: string }
+  > = {
+    good: {
+      label: "Good",
+      pillClass: "bg-emerald-50 border-emerald-200 text-emerald-800",
+      dotClass: "bg-emerald-500",
+    },
+    tight: {
+      label: "Tight",
+      pillClass: "bg-amber-50 border-amber-200 text-amber-800",
+      dotClass: "bg-amber-500",
+    },
+    impossible: {
+      label: "Impossible",
+      pillClass: "bg-red-50 border-red-200 text-red-700",
+      dotClass: "bg-red-500",
+    },
+    unknown: {
+      label: "Unknown",
+      pillClass: "bg-slate-50 border-slate-200 text-slate-500",
+      dotClass: "bg-slate-400",
+    },
+  };
+  // ─────────────────────────────────────────────────────────────────────────────
 
   const selectedRoomSummary = useMemo(() => {
     const picked = (Object.keys(roomLabels) as ConfigurableRoomType[])
@@ -393,6 +475,35 @@ const ConfigureRoomsModal: React.FC<ConfigureRoomsModalProps> = ({
 
           {submitStatus && <div className="text-sm text-indigo-700">{submitStatus}</div>}
 
+          {/* ── Feasibility badge ──────────────────────────────────── */}
+          <div className="flex items-center justify-between rounded-md border px-4 py-3"
+               style={{ borderColor: "inherit" }}
+          >
+            <div className="flex items-center gap-2">
+              <span className="text-sm font-medium text-slate-700">Feasibility</span>
+              <span
+                className={`inline-flex items-center gap-1.5 rounded-full border px-3 py-1 text-xs font-semibold ${
+                  feasibilityConfig[feasibility].pillClass
+                }`}
+              >
+                <span
+                  className={`h-2 w-2 rounded-full ${feasibilityConfig[feasibility].dotClass}`}
+                />
+                {feasibilityConfig[feasibility].label}
+              </span>
+            </div>
+            {feasibility === "impossible" && (
+              <span className="text-xs text-red-600">
+                Room areas exceed floor space — reduce rooms or increase floor size.
+              </span>
+            )}
+            {feasibility === "tight" && (
+              <span className="text-xs text-amber-700">
+                Floor space is very tight — generation may struggle.
+              </span>
+            )}
+          </div>
+
           <div className="flex items-center justify-end gap-2">
             <button
               type="button"
@@ -403,7 +514,7 @@ const ConfigureRoomsModal: React.FC<ConfigureRoomsModalProps> = ({
             </button>
             <button
               type="submit"
-              disabled={!hasValidLimits}
+              disabled={!hasValidLimits || feasibility === "impossible"}
               className="rounded bg-indigo-600 px-4 py-2 text-sm text-white hover:bg-indigo-700 disabled:cursor-not-allowed disabled:opacity-50"
             >
               Submit Room Requirements
