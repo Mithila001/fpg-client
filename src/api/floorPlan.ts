@@ -45,7 +45,7 @@ export const fetchFormatV2JobState = async (
   jobId: string,
 ): Promise<JobStateResponse<FormatV2Result>> => {
   const state = await fetchJobState<any>(jobId);
-  
+
   if (state.result && typeof state.result === 'object' && 'result' in state.result) {
     if (state.result.result && state.result.result.union_results) {
       state.result = state.result.result;
@@ -137,8 +137,8 @@ export const roomCentersFromResult = (result: FormatV2Result): Coordinate[] => {
 
 export const roomsToLabels = (result: FormatV2Result): Label[] => {
   return roomCentersFromResult(result).map((center) => ({
-    x: center.x * 100,
-    y: center.y * 100,
+    x: center.x * 10,
+    y: center.y * 10,
     text: center.label ?? "Room",
   }));
 };
