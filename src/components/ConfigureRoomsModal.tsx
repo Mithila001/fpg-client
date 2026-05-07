@@ -87,6 +87,12 @@ const ConfigureRoomsModal: React.FC<ConfigureRoomsModalProps> = ({
   const [globalRoomSize, setGlobalRoomSize] = useState<string>("regular");
   const [submitStatus, setSubmitStatus] = useState<string | null>(null);
 
+  const formatMetersFloor = (cmValue: number): string => {
+    const meters = cmValue / 100;
+    const flooredMeters = Math.floor(meters * 100) / 100;
+    return flooredMeters.toFixed(2);
+  };
+
   useEffect(() => {
     if (!isOpen) return;
 
@@ -110,8 +116,8 @@ const ConfigureRoomsModal: React.FC<ConfigureRoomsModalProps> = ({
         attachedBathroom: 0,
       });
       // Step A: auto-populate floor dimensions from buildable rectangle
-      setFloorWidthInput(maxUsableWidth !== null ? (maxUsableWidth / 100).toFixed(2) : "");
-      setFloorHeightInput(maxUsableHeight !== null ? (maxUsableHeight / 100).toFixed(2) : "");
+      setFloorWidthInput(maxUsableWidth !== null ? formatMetersFloor(maxUsableWidth) : "");
+      setFloorHeightInput(maxUsableHeight !== null ? formatMetersFloor(maxUsableHeight) : "");
       setSubmitStatus(null);
       return;
     }
@@ -302,7 +308,11 @@ const ConfigureRoomsModal: React.FC<ConfigureRoomsModalProps> = ({
       return;
     }
 
-    if (floorWidthCm > maxUsableWidth || floorHeightCm > maxUsableHeight) {
+    const toleranceCm = 0.01;
+    if (
+      floorWidthCm - maxUsableWidth > toleranceCm ||
+      floorHeightCm - maxUsableHeight > toleranceCm
+    ) {
       setSubmitStatus("Floor dimensions cannot exceed max usable width/height.");
       return;
     }
@@ -362,7 +372,7 @@ const ConfigureRoomsModal: React.FC<ConfigureRoomsModalProps> = ({
         <form onSubmit={handleSubmit} className="grid gap-4 px-6 py-5">
           <div className="rounded-md border border-slate-200 p-3">
             <h3 className="mb-3 text-sm font-semibold text-slate-800">Room Requirements</h3>
-            
+
             <div className="mb-4 flex items-center justify-between border-b border-slate-200 pb-3">
               <span className="text-sm text-slate-700">Global Room Size</span>
               <select
@@ -409,9 +419,10 @@ const ConfigureRoomsModal: React.FC<ConfigureRoomsModalProps> = ({
                       checked={selectedRooms[roomType]}
                       onChange={() => !isMandatory && handleToggleRoom(roomType)}
                       disabled={isMandatory}
-                      className={`h-4 w-4 ${isMandatory ? 'opacity-50 cursor-not-allowed' : ''}`}
+                      className={`h-4 w-4 ${isMandatory ? "opacity-50 cursor-not-allowed" : ""}`}
                     />
-                    {roomLabels[roomType]} {isMandatory && <span className="text-xs text-amber-600">(Req)</span>}
+                    {roomLabels[roomType]}{" "}
+                    {isMandatory && <span className="text-xs text-amber-600">(Req)</span>}
                   </label>
 
                   <input
@@ -476,8 +487,9 @@ const ConfigureRoomsModal: React.FC<ConfigureRoomsModalProps> = ({
           {submitStatus && <div className="text-sm text-indigo-700">{submitStatus}</div>}
 
           {/* ── Feasibility badge ──────────────────────────────────── */}
-          <div className="flex items-center justify-between rounded-md border px-4 py-3"
-               style={{ borderColor: "inherit" }}
+          <div
+            className="flex items-center justify-between rounded-md border px-4 py-3"
+            style={{ borderColor: "inherit" }}
           >
             <div className="flex items-center gap-2">
               <span className="text-sm font-medium text-slate-700">Feasibility</span>

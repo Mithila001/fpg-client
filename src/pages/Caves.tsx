@@ -15,10 +15,7 @@ import {
   type UsableLandRoadConnectedSegment,
   type BuildableRectangleSides,
 } from "../api/getUsableLand";
-import {
-  fetchRoomSizeConstraints,
-  type RoomSizeConstraint,
-} from "../api/algorithms";
+import { fetchRoomSizeConstraints, type RoomSizeConstraint } from "../api/algorithms";
 import {
   submitFormatV2Job,
   fetchFormatV2JobState,
@@ -80,7 +77,8 @@ const Caves: React.FC = () => {
     UsableLandPoint[] | null
   >(null);
   const [shrunkBoundary, setShrunkBoundary] = useState<UsableLandPoint[] | null>(null);
-  const [buildableRectangleSides, setBuildableRectangleSides] = useState<BuildableRectangleSides | null>(null);
+  const [buildableRectangleSides, setBuildableRectangleSides] =
+    useState<BuildableRectangleSides | null>(null);
   const [buildableRectangleSize, setBuildableRectangleSize] = useState<{
     width: number;
     height: number;
@@ -101,7 +99,7 @@ const Caves: React.FC = () => {
   const [floorPlanStatus, setFloorPlanStatus] = useState<string | null>(null);
   const [floorPlanError, setFloorPlanError] = useState<string | null>(null);
   const [showFloorPlanView, setShowFloorPlanView] = useState(false);
-  const [floorPlanEvents, setFloorPlanEvents] = useState<JobEventPayload[]>([]);
+  const [floorPlanEvent, setFloorPlanEvent] = useState<JobEventPayload | null>(null);
   const [floorPlanJobId, setFloorPlanJobId] = useState<string | null>(null);
   const floorPlanEventSourceRef = useRef<EventSource | null>(null);
   const [aspectRatio, setAspectRatio] = useState<string>("1:1");
@@ -169,14 +167,9 @@ const Caves: React.FC = () => {
     }
   };
 
-  const appendEvents = (
-    setter: React.Dispatch<React.SetStateAction<JobEventPayload[]>>,
-    event: JobEventPayload,
-  ) => {
-    setter((prev) => {
-      const next = [...prev, event];
-      return next.slice(-8);
-    });
+  const buildTrialEventNames = (count: number): string[] => {
+    if (!Number.isFinite(count) || count <= 0) return [];
+    return Array.from({ length: Math.floor(count) + 1 }, (_, index) => `trial_${index}`);
   };
 
   const eventDisplay = (event: JobEventPayload): string => {
@@ -465,7 +458,7 @@ const Caves: React.FC = () => {
     setIsGeneratingFloorPlan(true);
     setFloorPlanError(null);
     setFloorPlanStatus("Submitting floor plan job...");
-    setFloorPlanEvents([]);
+    setFloorPlanEvent(null);
     setFloorPlanJobId(null);
 
     setSegments(null);
@@ -478,10 +471,12 @@ const Caves: React.FC = () => {
       setFloorPlanJobId(submission.job_id);
       setFloorPlanStatus(submission.message || `Floor plan job submitted (${submission.job_id}).`);
 
+      const trialEvents = buildTrialEventNames(submittedRequirements.payload.optuna_trial_count);
+
       floorPlanEventSourceRef.current = subscribeToJobEvents(
         submission.job_id,
         (event) => {
-          appendEvents(setFloorPlanEvents, event);
+          setFloorPlanEvent(event);
           setFloorPlanStatus(eventDisplay(event));
 
           if (isTerminalEvent(event.event)) {
@@ -494,6 +489,7 @@ const Caves: React.FC = () => {
           setFloorPlanError("Live updates disconnected. Check job status.");
           setIsGeneratingFloorPlan(false);
         },
+        trialEvents,
       );
     } catch (error) {
       const message = error instanceof Error ? error.message : "Failed to generate floor plan.";
@@ -551,7 +547,7 @@ const Caves: React.FC = () => {
               subtitle={
                 floorPlanJobId ? `Job ID: ${floorPlanJobId}` : "Waiting for server response"
               }
-              events={floorPlanEvents}
+              event={floorPlanEvent}
             />
           </div>
         </div>

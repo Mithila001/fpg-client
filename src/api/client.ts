@@ -68,6 +68,7 @@ export const subscribeToJobEvents = (
   jobId: string,
   onEvent: JobEventHandler,
   onError?: (error: Event) => void,
+  extraEventTypes: string[] = [],
 ): EventSource => {
   const source = new EventSource(`${BASE_URL}/algorithms/job/${jobId}/events`);
 
@@ -76,7 +77,9 @@ export const subscribeToJobEvents = (
     onEvent({ ...payload, eventName, raw: message.data });
   };
 
-  jobEventTypes.forEach((eventName) => {
+  const eventNames = Array.from(new Set([...jobEventTypes, ...extraEventTypes]));
+
+  eventNames.forEach((eventName) => {
     if (eventName === "message") {
       source.onmessage = handler(eventName);
     } else {
