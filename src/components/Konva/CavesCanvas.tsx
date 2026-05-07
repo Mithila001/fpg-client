@@ -74,7 +74,7 @@ const CavesCanvas: React.FC<CavesCanvasProps> = ({ mode, editState, editActions,
       segments={viewState.segments}
       labels={viewState.labels ?? undefined}
       openings={viewState.openings ?? undefined}
-      pxPerCm={1}
+      pxPerCm={0.01}
       wallThickness={6}
     />
   );

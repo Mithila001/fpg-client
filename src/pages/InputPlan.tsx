@@ -178,6 +178,18 @@ const InputPlan: React.FC = () => {
       const nextBoundary = result.shrunk_boundary ?? [];
       const nextRectangleWidth = result.buildable_rectangle?.width ?? null;
       const nextRectangleHeight = result.buildable_rectangle?.height ?? null;
+      
+      const currentArea = calculatePolygonArea(points, KEYS.slice(0, borderCount));
+      
+      // Catch backend geometry inversion bug where setbacks > plot size
+      if (result.buildable_rectangle && result.buildable_rectangle.area > currentArea * 1.05) {
+        setBuildableRectangleVertices(null);
+        setShrunkBoundary(null);
+        setBuildableRectangleSize(null);
+        setRunAlgoStatus("Error: The plot is too small for the required setbacks. Please apply a larger target area.");
+        setIsRunningAlgorithm(false);
+        return;
+      }
 
       setBuildableRectangleVertices(nextRectangle.length > 0 ? nextRectangle : null);
       setShrunkBoundary(nextBoundary.length > 0 ? nextBoundary : null);

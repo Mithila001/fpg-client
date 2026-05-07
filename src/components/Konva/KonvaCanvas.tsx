@@ -19,8 +19,8 @@ export interface CoordinateCanvasHandle {
   reset: () => void;
 }
 
-const MIN_VIEW_SCALE = 0.05;
-const MAX_VIEW_SCALE = 5;
+const MIN_VIEW_SCALE = 5;
+const MAX_VIEW_SCALE = 1000;
 const FIT_PADDING = 36;
 
 const clamp = (value: number, min: number, max: number): number =>
@@ -200,7 +200,8 @@ const CoordinateCanvas = forwardRef<CoordinateCanvasHandle, CoordinateCanvasProp
                 startY={viewStartY} 
                 endY={viewEndY} 
                 gridSize={gridSize} 
-                pxPerCm={scale} 
+                pxPerCm={scale}
+                stageScale={stageScale}
               />
 
               {segments && segments.length > 0 ? (
@@ -211,14 +212,15 @@ const CoordinateCanvas = forwardRef<CoordinateCanvasHandle, CoordinateCanvasProp
                       x: cmToPx(p.x, scale),
                       y: -cmToPx(p.y, scale),
                     }))}
-                    thickness={wallThickness ?? 6}
+                    thickness={cmToPx(wallThickness ?? 6, scale)}
+                    stageScale={stageScale}
                   />
                 ))
               ) : (
-                <Wall points={scaledPoints} thickness={wallThickness ?? 6} />
+                <Wall points={scaledPoints} thickness={cmToPx(wallThickness ?? 6, scale)} stageScale={stageScale} />
               )}
 
-              {scaledLabels && <Labels labels={scaledLabels} />}
+              {scaledLabels && <Labels labels={scaledLabels} stageScale={stageScale} />}
 
               {openings && openings.length > 0 && (
                 <Openings 
@@ -229,7 +231,8 @@ const CoordinateCanvas = forwardRef<CoordinateCanvasHandle, CoordinateCanvasProp
                   }))} 
                   pxPerCm={scale} 
                   offsetX={0} 
-                  offsetY={0} 
+                  offsetY={0}
+                  stageScale={stageScale}
                 />
               )}
             </Layer>

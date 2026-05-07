@@ -137,8 +137,8 @@ export const roomCentersFromResult = (result: FormatV2Result): Coordinate[] => {
 
 export const roomsToLabels = (result: FormatV2Result): Label[] => {
   return roomCentersFromResult(result).map((center) => ({
-    x: center.x,
-    y: center.y,
+    x: center.x * 100,
+    y: center.y * 100,
     text: center.label ?? "Room",
   }));
 };

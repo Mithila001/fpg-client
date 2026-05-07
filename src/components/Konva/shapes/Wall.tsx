@@ -10,6 +10,7 @@ interface WallProps {
   // fill/stroke color of the wall
   color?: string;
   strokeColor?: string;
+  stageScale: number;
 }
 
 const Wall: React.FC<WallProps> = ({
@@ -17,6 +18,7 @@ const Wall: React.FC<WallProps> = ({
   thickness = 6,
   color = "#d1d5db", // light gray fill
   strokeColor = "#4b5563", // darker edge
+  stageScale,
 }) => {
   const elems: React.ReactNode[] = [];
 
@@ -48,7 +50,7 @@ const Wall: React.FC<WallProps> = ({
         closed
         fill={color}
         stroke={strokeColor}
-        strokeWidth={1}
+        strokeWidth={1 / stageScale}
       />,
     );
 
@@ -58,7 +60,7 @@ const Wall: React.FC<WallProps> = ({
         key={`wall-line-${i}`}
         points={[p1.x, p1.y, p2.x, p2.y]}
         stroke={strokeColor}
-        strokeWidth={1}
+        strokeWidth={1 / stageScale}
       />,
     );
   }

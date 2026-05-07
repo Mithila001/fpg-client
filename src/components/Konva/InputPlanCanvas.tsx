@@ -1,7 +1,7 @@
 import React, { useCallback, useEffect, useMemo, useRef, useState } from "react";
 import { Circle, Layer, Line, Stage, Text } from "react-konva";
 import Konva from "konva";
-import { formatLengthFromCm } from "../../utils/units";
+import { formatLengthFromCm, cmToM, mToCm } from "../../utils/units";
 import {
   buildRoadPolygonFromPlacement,
   findNearestBoundarySegment,
@@ -42,8 +42,8 @@ const ROAD_LENGTH = 1000;
 const ROAD_GAP = 6;
 const ROAD_SNAP_THRESHOLD = 36;
 const FIT_PADDING = 36;
-const MIN_VIEW_SCALE = 0.2;
-const MAX_VIEW_SCALE = 3;
+const MIN_VIEW_SCALE = 5;
+const MAX_VIEW_SCALE = 1000;
 
 const distance = (a: RoomPoint, b: RoomPoint): number => {
   const dx = b.x - a.x;
@@ -174,7 +174,7 @@ const InputPlanCanvas: React.FC<InputPlanCanvasProps> = ({
   );
 
   const polygon = useMemo(
-    () => orderedKeys.flatMap((key) => [points[key].x, points[key].y]),
+    () => orderedKeys.flatMap((key) => [cmToM(points[key].x), cmToM(points[key].y)]),
     [orderedKeys, points],
   );
 
@@ -191,25 +191,25 @@ const InputPlanCanvas: React.FC<InputPlanCanvasProps> = ({
   }, [previewRoad, points, orderedKeys]);
 
   const roadToLinePoints = (roadPolygon: RoomPoint[]): number[] =>
-    roadPolygon.flatMap((point) => [point.x, point.y]);
+    roadPolygon.flatMap((point) => [cmToM(point.x), cmToM(point.y)]);
 
   const buildableRectanglePoints = useMemo(() => {
     if (!buildableRectangle || buildableRectangle.length < 3) return null;
-    return buildableRectangle.flatMap((point) => [point.x, point.y]);
+    return buildableRectangle.flatMap((point) => [cmToM(point.x), cmToM(point.y)]);
   }, [buildableRectangle]);
 
   const shrunkBoundaryPoints = useMemo(() => {
     if (!shrunkBoundary || shrunkBoundary.length < 3) return null;
-    return shrunkBoundary.flatMap((point) => [point.x, point.y]);
+    return shrunkBoundary.flatMap((point) => [cmToM(point.x), cmToM(point.y)]);
   }, [shrunkBoundary]);
 
   const allGeometryPoints = useMemo(() => {
-    const base = orderedKeys.map((key) => points[key]);
+    const base = orderedKeys.map((key) => ({ x: cmToM(points[key].x), y: cmToM(points[key].y) }));
     if (buildableRectangle && buildableRectangle.length > 0) {
-      base.push(...buildableRectangle);
+      base.push(...buildableRectangle.map(p => ({ x: cmToM(p.x), y: cmToM(p.y) })));
     }
     if (shrunkBoundary && shrunkBoundary.length > 0) {
-      base.push(...shrunkBoundary);
+      base.push(...shrunkBoundary.map(p => ({ x: cmToM(p.x), y: cmToM(p.y) })));
     }
     return base;
   }, [orderedKeys, points, buildableRectangle, shrunkBoundary]);
@@ -261,8 +261,8 @@ const InputPlanCanvas: React.FC<InputPlanCanvasProps> = ({
     if (!pointer) return null;
 
     return {
-      x: (pointer.x - stageX) / stageScale,
-      y: (pointer.y - stageY) / stageScale,
+      x: mToCm((pointer.x - stageX) / stageScale),
+      y: mToCm((pointer.y - stageY) / stageScale),
     };
   };
 
@@ -315,17 +315,19 @@ const InputPlanCanvas: React.FC<InputPlanCanvasProps> = ({
   };
 
   const handleDragMove = (key: CornerKey, e: Konva.KonvaEventObject<DragEvent>) => {
+    const mx = e.target.x();
+    const my = e.target.y();
     const candidate = {
-      x: clamp(e.target.x(), PADDING, dimensions.width - PADDING),
-      y: clamp(e.target.y(), PADDING, dimensions.height - PADDING),
+      x: clamp(mToCm(mx), 0, 1000000),
+      y: clamp(mToCm(my), 0, 1000000),
     };
 
     const next = { ...points, [key]: candidate };
     if (isValidPolygon(next, orderedKeys)) {
       onPointsChange(next);
-      e.target.position(candidate);
+      e.target.position({ x: cmToM(candidate.x), y: cmToM(candidate.y) });
     } else {
-      e.target.position(points[key]);
+      e.target.position({ x: cmToM(points[key].x), y: cmToM(points[key].y) });
     }
   };
 
@@ -422,7 +424,7 @@ const InputPlanCanvas: React.FC<InputPlanCanvasProps> = ({
               closed
               fill="#475569"
               stroke="#1e293b"
-              strokeWidth={2}
+              strokeWidth={2 / stageScale}
             />
           )}
 
@@ -432,12 +434,12 @@ const InputPlanCanvas: React.FC<InputPlanCanvasProps> = ({
               closed
               fill="#64748b88"
               stroke="#334155"
-              strokeWidth={2}
-              dash={[8, 6]}
+              strokeWidth={2 / stageScale}
+              dash={[8 / stageScale, 6 / stageScale]}
             />
           )}
 
-          <Line points={polygon} closed stroke="#0f172a" strokeWidth={6} fill="#dbeafe" />
+          <Line points={polygon} closed stroke="#0f172a" strokeWidth={6 / stageScale} fill="#dbeafe" />
 
           {buildableRectanglePoints && (
             <Line
@@ -445,7 +447,7 @@ const InputPlanCanvas: React.FC<InputPlanCanvasProps> = ({
               closed
               fill="#dc262633"
               stroke="#dc2626"
-              strokeWidth={3}
+              strokeWidth={3 / stageScale}
             />
           )}
 
@@ -454,28 +456,24 @@ const InputPlanCanvas: React.FC<InputPlanCanvasProps> = ({
               points={shrunkBoundaryPoints}
               closed
               stroke="#7c2d12"
-              strokeWidth={3}
+              strokeWidth={3 / stageScale}
             />
           )}
 
           {orderedKeys.map((key) => {
             const point = points[key];
+            const mx = cmToM(point.x);
+            const my = cmToM(point.y);
             return (
               <React.Fragment key={key}>
                 <Circle
-                  x={point.x}
-                  y={point.y}
-                  radius={8}
+                  x={mx}
+                  y={my}
+                  radius={8 / stageScale}
                   fill={active === key ? "#f97316" : "#2563eb"}
                   stroke="#ffffff"
-                  strokeWidth={2}
+                  strokeWidth={2 / stageScale}
                   draggable={editable}
-                  dragBoundFunc={(pos) => {
-                    return {
-                      x: clamp(pos.x, PADDING, dimensions.width - PADDING),
-                      y: clamp(pos.y, PADDING, dimensions.height - PADDING),
-                    };
-                  }}
                   onDragStart={() => editable && setActive(key)}
                   onDragMove={(e) => handleDragMove(key, e)}
                   onDragEnd={(e) => {
@@ -484,10 +482,10 @@ const InputPlanCanvas: React.FC<InputPlanCanvasProps> = ({
                   }}
                 />
                 <Text
-                  x={point.x + 10}
-                  y={point.y - 20}
-                  text={`${key} (${Math.round(point.x)}, ${Math.round(point.y)})`}
-                  fontSize={12}
+                  x={mx + 10 / stageScale}
+                  y={my - 20 / stageScale}
+                  text={`${key} (${mx.toFixed(2)}m, ${my.toFixed(2)}m)`}
+                  fontSize={12 / stageScale}
                   fill="#1f2937"
                 />
               </React.Fragment>
@@ -495,20 +493,20 @@ const InputPlanCanvas: React.FC<InputPlanCanvasProps> = ({
           })}
 
           <Text
-            x={16}
-            y={12}
+            x={(16 - stageX) / stageScale}
+            y={(12 - stageY) / stageScale}
             text={orderedKeys
               .map((key) => `${key}: ${formatLengthFromCm(wallLengths[key] ?? 0, 2)}`)
               .join(" | ")}
-            fontSize={13}
+            fontSize={13 / stageScale}
             fill="#334155"
           />
           {!editable && (
             <Text
-              x={16}
-              y={34}
+              x={(16 - stageX) / stageScale}
+              y={(34 - stageY) / stageScale}
               text="Shape confirmed (view-only). Click Edit to modify borders."
-              fontSize={12}
+              fontSize={12 / stageScale}
               fill="#64748b"
             />
           )}

@@ -7,11 +7,12 @@ interface OpeningsProps {
   pxPerCm: number;
   offsetX: number;
   offsetY: number;
+  stageScale: number;
 }
 
 
 
-const Openings: React.FC<OpeningsProps> = ({ openings, pxPerCm, offsetX, offsetY }) => {
+const Openings: React.FC<OpeningsProps> = ({ openings, pxPerCm, offsetX, offsetY, stageScale }) => {
   return (
     <>
       {openings.map((opening, idx) => {
@@ -31,40 +32,40 @@ const Openings: React.FC<OpeningsProps> = ({ openings, pxPerCm, offsetX, offsetY
         const ny = dx / len;
 
         if (opening.kind === "window") {
-          const gap = 3;
+          const gap = 3 / stageScale;
           return (
             <React.Fragment key={`opening-${idx}`}>
-              <Line points={[x1, y1, x2, y2]} stroke="#0f766e" strokeWidth={3} lineCap="round" />
+              <Line points={[x1, y1, x2, y2]} stroke="#0f766e" strokeWidth={3 / stageScale} lineCap="round" />
               <Line
                 points={[x1 + nx * gap, y1 + ny * gap, x2 + nx * gap, y2 + ny * gap]}
                 stroke="#2dd4bf"
-                strokeWidth={5}
+                strokeWidth={5 / stageScale}
                 lineCap="round"
               />
               <Line
                 points={[x1 - nx * gap, y1 - ny * gap, x2 - nx * gap, y2 - ny * gap]}
                 stroke="#22d3ee"
-                strokeWidth={5}
+                strokeWidth={5 / stageScale}
                 lineCap="round"
               />
             </React.Fragment>
           );
         }
 
-        const gap = 3;
+        const gap = 3 / stageScale;
         return (
           <React.Fragment key={`opening-${idx}`}>
-            <Line points={[x1, y1, x2, y2]} stroke="#9f1239" strokeWidth={3} lineCap="round" />
+            <Line points={[x1, y1, x2, y2]} stroke="#9f1239" strokeWidth={3 / stageScale} lineCap="round" />
             <Line
               points={[x1 + nx * gap, y1 + ny * gap, x2 + nx * gap, y2 + ny * gap]}
               stroke="#ef4444"
-              strokeWidth={5}
+              strokeWidth={5 / stageScale}
               lineCap="round"
             />
             <Line
               points={[x1 - nx * gap, y1 - ny * gap, x2 - nx * gap, y2 - ny * gap]}
               stroke="#fca5a5"
-              strokeWidth={5}
+              strokeWidth={5 / stageScale}
               lineCap="round"
             />
           </React.Fragment>

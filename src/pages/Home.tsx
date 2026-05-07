@@ -145,7 +145,7 @@ const Home: React.FC = () => {
                 segments={segments}
                 labels={labels ?? undefined}
                 openings={openings ?? undefined}
-                pxPerCm={1}
+                pxPerCm={0.01}
                 wallThickness={6}
               />
             )}
