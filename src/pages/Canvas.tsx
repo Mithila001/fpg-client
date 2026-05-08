@@ -1,5 +1,5 @@
 import React, { useEffect, useMemo, useRef, useState } from "react";
-import CavesCanvas from "../components/Konva/CavesCanvas";
+import WorkspaceCanvas from "../components/Konva/WorkspaceCanvas";
 import type { RoomPoints, CornerKey, PointHint } from "../components/Konva/InputPlanCanvas";
 import {
   calculatePolygonArea,
@@ -55,7 +55,7 @@ const buildClosedLoopCoordinates = (
   return loop;
 };
 
-const Caves: React.FC = () => {
+const Canvas: React.FC = () => {
   const [points, setPoints] = useState<RoomPoints>({
     A: { x: 140, y: 140 },
     B: { x: 460, y: 140 },
@@ -536,7 +536,7 @@ const Caves: React.FC = () => {
               : "Step B: Floor Plan Preview"}
           </div>
           <div className="relative min-h-0 flex-1 overflow-hidden rounded border border-slate-200 bg-white p-1">
-            <CavesCanvas
+            <WorkspaceCanvas
               mode={canvasMode}
               editState={{
                 points,
@@ -786,4 +786,4 @@ const Caves: React.FC = () => {
   );
 };
 
-export default Caves;
+export default Canvas;

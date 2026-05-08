@@ -7,7 +7,7 @@ import type { Coordinate, Label } from "./shapes/types";
 import type { CanvasOpening } from "../../types";
 import type { PointHint } from "./InputPlanCanvas";
 
-interface CavesCanvasProps {
+interface WorkspaceCanvasProps {
   mode: "edit" | "view";
   editState: {
     points: RoomPoints;
@@ -36,7 +36,7 @@ interface CavesCanvasProps {
   };
 }
 
-const CavesCanvas: React.FC<CavesCanvasProps> = ({ mode, editState, editActions, viewState }) => {
+const WorkspaceCanvas: React.FC<WorkspaceCanvasProps> = ({ mode, editState, editActions, viewState }) => {
   if (mode === "edit") {
     return (
       <InputPlanCanvas
@@ -94,4 +94,4 @@ const CavesCanvas: React.FC<CavesCanvasProps> = ({ mode, editState, editActions,
   );
 };
 
-export default CavesCanvas;
+export default WorkspaceCanvas;

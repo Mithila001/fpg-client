@@ -1,177 +1,95 @@
-import React, { useState, useRef, useCallback, useEffect } from "react";
-import { useLocation } from "react-router-dom";
-import CoordinateCanvas from "../components/Konva/KonvaCanvas";
-import type { CoordinateCanvasHandle } from "../components/Konva/KonvaCanvas";
-import {
-  submitFormatV2Job,
-  fetchFormatV2JobState,
-  formatResultToSegments,
-  roomCentersFromResult,
-  roomsToLabels,
-  roomsToOpenings,
-  type FormatV2Request,
-} from "../api/floorPlan.ts";
-import type { Coordinate, Label } from "../components/Konva/shapes/types";
-import type { CanvasOpening } from "../types";
-import { subscribeToJobEvents } from "../api/client";
-
-type HomeRouteState = {
-  generateRequest?: FormatV2Request;
-};
+import React from "react";
+import { Link } from "react-router-dom";
 
 const Home: React.FC = () => {
-  const location = useLocation();
-  const canvasRef = useRef<CoordinateCanvasHandle>(null);
-  const [segments, setSegments] = useState<Coordinate[][] | null>(null);
-  const [labels, setLabels] = useState<Label[] | null>(null);
-  const [roomCenters, setRoomCenters] = useState<Coordinate[] | null>(null);
-  const [openings, setOpenings] = useState<CanvasOpening[] | null>(null);
-  const [loading, setLoading] = useState(false);
-  const [error, setError] = useState<string | null>(null);
-  const [status, setStatus] = useState<string | null>(null);
-  const lastRequestAtRef = useRef(0);
-  const inFlightRef = useRef(false);
-  const eventSourceRef = useRef<EventSource | null>(null);
-
-  const defaultRequest: FormatV2Request = {
-    floor_width: 1000,
-    floor_height: 800,
-    room_template: {
-      name: "Quick Layout",
-      data: [{ type: "Living Room", size: "Large", name: "Main Lounge" }],
-    },
-    should_optuna_run: false,
-    optuna_trial_count: 20,
-  };
-
-  // helper to fetch and update data
-  const closeStream = () => {
-    if (eventSourceRef.current) {
-      eventSourceRef.current.close();
-      eventSourceRef.current = null;
-    }
-  };
-
-  useEffect(() => {
-    return () => {
-      closeStream();
-    };
-  }, []);
-
-  const load = useCallback(async (request?: FormatV2Request, skipThrottle = false) => {
-    const now = Date.now();
-    if (inFlightRef.current) return;
-    if (!skipThrottle && now - lastRequestAtRef.current < 2000) return;
-
-    lastRequestAtRef.current = now;
-    inFlightRef.current = true;
-    setLoading(true);
-    setError(null);
-    setStatus("Submitting job...");
-    try {
-      closeStream();
-      const submission = await submitFormatV2Job(request ?? defaultRequest);
-      setStatus(submission.message || `Job submitted (${submission.job_id}).`);
-
-      eventSourceRef.current = subscribeToJobEvents(
-        submission.job_id,
-        async (event) => {
-          setStatus(event.message ?? event.event ?? "Processing...");
-
-          if (
-            event.event === "success" ||
-            event.event === "time_out" ||
-            event.event === "fpg_low_score"
-          ) {
-            closeStream();
-            const state = await fetchFormatV2JobState(submission.job_id);
-            if (!state.result) {
-              setError(`Job ended with status ${state.status}, but no result was returned.`);
-              inFlightRef.current = false;
-              setLoading(false);
-              return;
-            }
-
-            setSegments(formatResultToSegments(state.result));
-            setRoomCenters(roomCentersFromResult(state.result));
-            setLabels(roomsToLabels(state.result));
-            setOpenings(roomsToOpenings(state.result));
-            setStatus(state.result.message || "Floor plan generated successfully.");
-            inFlightRef.current = false;
-            setLoading(false);
-          }
-        },
-        () => {
-          closeStream();
-          setError("Live updates disconnected. Check job status.");
-          inFlightRef.current = false;
-          setLoading(false);
-        },
-      );
-    } catch (err) {
-      const message = err instanceof Error ? err.message : "Failed to load formatted plan.";
-      setError(message);
-      console.error(err);
-    } finally {
-      if (!eventSourceRef.current) {
-        inFlightRef.current = false;
-        setLoading(false);
-      }
-    }
-  }, []);
-
-  useEffect(() => {
-    const routeState = (location.state ?? null) as HomeRouteState | null;
-    if (!routeState?.generateRequest) return;
-
-    void load(routeState.generateRequest, true);
-  }, [location.state, load]);
-
   return (
-    // ensure this page fills the available space and never scrolls
-    <div className="flex flex-col flex-1 min-h-0 h-full">
-      <div className="flex flex-1 overflow-hidden min-h-0">
-        {/* Left */}
-        <div className="bg-amber-200 flex-1 min-w-0 p-2 flex flex-col gap-2">
-          <div className="flex items-center gap-3">
-            {loading && <span className="text-sm">Loading…</span>}
-            {status && <span className="text-xs text-slate-600">{status}</span>}
-            {error && <span className="text-red-600 text-sm">{error}</span>}
-          </div>
-          <div className="flex-1 min-h-0">
-            {segments !== null && (
-              <CoordinateCanvas
-                ref={canvasRef}
-                segments={segments}
-                labels={labels ?? undefined}
-                openings={openings ?? undefined}
-                pxPerCm={0.01}
-                wallThickness={6}
-              />
-            )}
-          </div>
+    <div className="relative min-h-full flex flex-col bg-slate-50 overflow-hidden">
+      {/* Decorative background blobs */}
+      <div className="absolute top-0 inset-x-0 h-full overflow-hidden pointer-events-none">
+        <div className="absolute -top-[20%] -left-[10%] w-[50%] h-[50%] rounded-full bg-indigo-200/50 blur-[120px] mix-blend-multiply" />
+        <div className="absolute top-[10%] -right-[10%] w-[40%] h-[40%] rounded-full bg-purple-200/50 blur-[120px] mix-blend-multiply" />
+        <div className="absolute -bottom-[20%] left-[20%] w-[60%] h-[60%] rounded-full bg-sky-200/40 blur-[120px] mix-blend-multiply" />
+      </div>
+
+      <div className="relative z-10 flex flex-col items-center justify-center grow px-6 py-20 text-center max-w-5xl mx-auto w-full">
+        
+        <div className="inline-flex items-center gap-2 px-3 py-1 rounded-full bg-white/60 border border-indigo-100 shadow-sm backdrop-blur-md mb-8">
+          <span className="flex h-2 w-2 rounded-full bg-indigo-500 animate-pulse"></span>
+          <span className="text-sm font-medium text-indigo-900">V2 Engine Now Available</span>
         </div>
 
-        {/* Right*/}
-        <div className="bg-green-200 w-64 flex-none p-8 flex flex-col gap-4">
-          <div className="text-xs text-gray-700">Rooms detected: {roomCenters?.length ?? 0}</div>
-          <button
-            onClick={() => void load()}
-            disabled={loading}
-            className="px-3 py-2 bg-emerald-600 text-white text-sm rounded hover:bg-emerald-700 disabled:opacity-50 disabled:cursor-not-allowed"
+        <h1 className="text-5xl md:text-7xl font-extrabold tracking-tight text-slate-900 mb-6 drop-shadow-sm">
+          Design your dream home <br className="hidden md:block" />
+          <span className="text-transparent bg-clip-text bg-gradient-to-r from-indigo-600 to-purple-600">
+            in seconds.
+          </span>
+        </h1>
+        
+        <p className="mt-4 text-lg md:text-xl text-slate-600 max-w-2xl mx-auto mb-10 leading-relaxed">
+          The most advanced AI-powered floor plan generator. Simply define your land boundaries, configure your room requirements, and watch as optimized, professional floor plans are created instantly.
+        </p>
+
+        <div className="flex flex-col sm:flex-row gap-4 justify-center items-center w-full">
+          <Link
+            to="/canvas"
+            className="group relative inline-flex items-center justify-center gap-2 px-8 py-4 text-base font-semibold text-white transition-all duration-200 bg-indigo-600 border border-transparent rounded-full hover:bg-indigo-700 hover:shadow-lg hover:shadow-indigo-500/30 focus:outline-none focus:ring-2 focus:ring-offset-2 focus:ring-indigo-600 w-full sm:w-auto"
           >
-            Get New Floor Plan
-          </button>
-          <div className="text-xs text-gray-700">
-            API calls are limited to once every 2 seconds.
+            <span>Open Workspace</span>
+            <svg 
+              className="w-5 h-5 transition-transform group-hover:translate-x-1" 
+              fill="none" 
+              viewBox="0 0 24 24" 
+              stroke="currentColor"
+            >
+              <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M13 7l5 5m0 0l-5 5m5-5H6" />
+            </svg>
+          </Link>
+          
+          <a
+            href="#features"
+            className="inline-flex items-center justify-center gap-2 px-8 py-4 text-base font-semibold text-slate-700 transition-all duration-200 bg-white border border-slate-200 rounded-full hover:bg-slate-50 hover:text-slate-900 focus:outline-none focus:ring-2 focus:ring-offset-2 focus:ring-slate-200 w-full sm:w-auto"
+          >
+            Learn More
+          </a>
+        </div>
+
+        <div className="mt-20 grid grid-cols-1 md:grid-cols-3 gap-8 w-full text-left" id="features">
+          <div className="bg-white/60 backdrop-blur-lg border border-slate-200/60 rounded-2xl p-6 shadow-sm hover:shadow-md transition-shadow">
+            <div className="w-12 h-12 rounded-xl bg-indigo-100 flex items-center justify-center mb-4 text-indigo-600">
+              <svg className="w-6 h-6" fill="none" viewBox="0 0 24 24" stroke="currentColor">
+                <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M4 8V4m0 0h4M4 4l5 5m11-1V4m0 0h-4m4 0l-5 5M4 16v4m0 0h4m-4 0l5-5m11 5l-5-5m5 5v-4m0 4h-4" />
+              </svg>
+            </div>
+            <h3 className="text-xl font-semibold text-slate-900 mb-2">Smart Boundaries</h3>
+            <p className="text-slate-600 text-sm leading-relaxed">
+              Define arbitrary land shapes and automatically compute optimal buildable areas conforming to local setbacks and road constraints.
+            </p>
           </div>
-          <button
-            onClick={() => canvasRef.current?.reset()}
-            className="px-3 py-2 bg-blue-500 text-white text-sm rounded hover:bg-blue-600"
-          >
-            Reset View
-          </button>
-          <div className="flex-1">Right Property Panel</div>
+
+          <div className="bg-white/60 backdrop-blur-lg border border-slate-200/60 rounded-2xl p-6 shadow-sm hover:shadow-md transition-shadow">
+            <div className="w-12 h-12 rounded-xl bg-purple-100 flex items-center justify-center mb-4 text-purple-600">
+              <svg className="w-6 h-6" fill="none" viewBox="0 0 24 24" stroke="currentColor">
+                <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M19 11H5m14 0a2 2 0 012 2v6a2 2 0 01-2 2H5a2 2 0 01-2-2v-6a2 2 0 012-2m14 0V9a2 2 0 00-2-2M5 11V9a2 2 0 002-2m0 0V5a2 2 0 012-2h6a2 2 0 012 2v2M7 7h10" />
+              </svg>
+            </div>
+            <h3 className="text-xl font-semibold text-slate-900 mb-2">Algorithmic Generation</h3>
+            <p className="text-slate-600 text-sm leading-relaxed">
+              Our advanced engine tests thousands of permutations to find the perfect layout balancing natural light, flow, and structural efficiency.
+            </p>
+          </div>
+
+          <div className="bg-white/60 backdrop-blur-lg border border-slate-200/60 rounded-2xl p-6 shadow-sm hover:shadow-md transition-shadow">
+            <div className="w-12 h-12 rounded-xl bg-sky-100 flex items-center justify-center mb-4 text-sky-600">
+              <svg className="w-6 h-6" fill="none" viewBox="0 0 24 24" stroke="currentColor">
+                <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M15 12a3 3 0 11-6 0 3 3 0 016 0z" />
+                <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M2.458 12C3.732 7.943 7.523 5 12 5c4.478 0 8.268 2.943 9.542 7-1.274 4.057-5.064 7-9.542 7-4.477 0-8.268-2.943-9.542-7z" />
+              </svg>
+            </div>
+            <h3 className="text-xl font-semibold text-slate-900 mb-2">Instant Visualization</h3>
+            <p className="text-slate-600 text-sm leading-relaxed">
+              See your floor plan rendered in real-time as the algorithm optimizes. Make tweaks and instantly generate new, valid layouts.
+            </p>
+          </div>
         </div>
       </div>
     </div>
