@@ -56,6 +56,9 @@ const FIT_PADDING = 36;
 const MIN_VIEW_SCALE = 5;
 const MAX_VIEW_SCALE = 1000;
 
+const GRID_RESOLUTION_CM = 10; // 0.1m
+const snapToGrid = (cm: number) => Math.round(cm / GRID_RESOLUTION_CM) * GRID_RESOLUTION_CM;
+
 const distance = (a: RoomPoint, b: RoomPoint): number => {
   const dx = b.x - a.x;
   const dy = b.y - a.y;
@@ -143,6 +146,60 @@ const ROOM_COLORS: Record<string, string> = {
   livingRoom: "#8b5cf6", // violet
   hallway: "#f97316", // orange
   attachedBathroom: "#0ea5e9", // sky
+};
+
+const GridLayer: React.FC<{
+  width: number;
+  height: number;
+  stageScale: number;
+  stageX: number;
+  stageY: number;
+}> = ({ width, height, stageScale, stageX, stageY }) => {
+  const step = 0.1; // 0.1m
+  const majorStep = 1.0; // 1m
+
+  const minX = -stageX / stageScale;
+  const minY = -stageY / stageScale;
+  const maxX = (width - stageX) / stageScale;
+  const maxY = (height - stageY) / stageScale;
+
+  const startX = Math.floor(minX / step) * step;
+  const endX = Math.ceil(maxX / step) * step;
+  const startY = Math.floor(minY / step) * step;
+  const endY = Math.ceil(maxY / step) * step;
+
+  const lines = [];
+  const showFine = stageScale > 15;
+
+  for (let x = startX; x <= endX; x += step) {
+    const isMajor = Math.abs(Math.round(x / majorStep) * majorStep - x) < 0.001;
+    if (!isMajor && !showFine) continue;
+    lines.push(
+      <Line
+        key={`v-${x}`}
+        points={[x, startY, x, endY]}
+        stroke={isMajor ? "#e2e8f0" : "#f1f5f9"}
+        strokeWidth={(isMajor ? 1.5 : 0.7) / stageScale}
+        listening={false}
+      />,
+    );
+  }
+
+  for (let y = startY; y <= endY; y += step) {
+    const isMajor = Math.abs(Math.round(y / majorStep) * majorStep - y) < 0.001;
+    if (!isMajor && !showFine) continue;
+    lines.push(
+      <Line
+        key={`h-${y}`}
+        points={[startX, y, endX, y]}
+        stroke={isMajor ? "#e2e8f0" : "#f1f5f9"}
+        strokeWidth={(isMajor ? 1.5 : 0.7) / stageScale}
+        listening={false}
+      />,
+    );
+  }
+
+  return <Group>{lines}</Group>;
 };
 
 const InputPlanCanvas: React.FC<InputPlanCanvasProps> = ({
@@ -377,9 +434,11 @@ const InputPlanCanvas: React.FC<InputPlanCanvasProps> = ({
   const handleDragMove = (key: CornerKey, e: Konva.KonvaEventObject<DragEvent>) => {
     const mx = e.target.x();
     const my = e.target.y();
+    
+    // Snap to grid: 0.1m = 10cm
     const candidate = {
-      x: clamp(mToCm(mx), 0, 1000000),
-      y: clamp(mToCm(my), 0, 1000000),
+      x: clamp(snapToGrid(mToCm(mx)), 0, 1000000),
+      y: clamp(snapToGrid(mToCm(my)), 0, 1000000),
     };
 
     const next = { ...points, [key]: candidate };
@@ -414,8 +473,8 @@ const InputPlanCanvas: React.FC<InputPlanCanvasProps> = ({
 
     const offset = Math.max(24, len * 0.15);
     const candidate = {
-      x: clamp(mx + nx * offset, PADDING, dimensions.width - PADDING),
-      y: clamp(my + ny * offset, PADDING, dimensions.height - PADDING),
+      x: clamp(snapToGrid(mx + nx * offset), PADDING, 1000000),
+      y: clamp(snapToGrid(my + ny * offset), PADDING, 1000000),
     };
 
     const next = { ...points, [newKey]: candidate };
@@ -427,8 +486,8 @@ const InputPlanCanvas: React.FC<InputPlanCanvasProps> = ({
     }
 
     const alt = {
-      x: clamp(mx - nx * offset, PADDING, dimensions.width - PADDING),
-      y: clamp(my - ny * offset, PADDING, dimensions.height - PADDING),
+      x: clamp(snapToGrid(mx - nx * offset), PADDING, 1000000),
+      y: clamp(snapToGrid(my - ny * offset), PADDING, 1000000),
     };
     const nextAlt = { ...points, [newKey]: alt };
     if (isValidPolygon(nextAlt, nextOrder)) {
@@ -459,9 +518,37 @@ const InputPlanCanvas: React.FC<InputPlanCanvasProps> = ({
     setStageY(nextY);
   };
 
-  const handleZoomIn = () => zoomFromViewportCenter(0.2);
-  const handleZoomOut = () => zoomFromViewportCenter(-0.2);
+  const handleZoomIn = () => zoomFromViewportCenter(stageScale * 0.2);
+  const handleZoomOut = () => zoomFromViewportCenter(-stageScale * 0.2);
   const handleResetZoom = () => fitToGeometry();
+
+  const handleWheel = (e: Konva.KonvaEventObject<WheelEvent>) => {
+    e.evt.preventDefault();
+    const stage = stageRef.current;
+    if (!stage) return;
+
+    const oldScale = stageScale;
+    const pointerPos = stage.getPointerPosition();
+    if (!pointerPos) return;
+
+    const zoomSpeed = 0.1;
+    const direction = e.evt.deltaY > 0 ? -1 : 1;
+    const nextScale = clamp(oldScale + direction * zoomSpeed * oldScale, MIN_VIEW_SCALE, MAX_VIEW_SCALE);
+
+    const newX = pointerPos.x - ((pointerPos.x - stageX) / oldScale) * nextScale;
+    const newY = pointerPos.y - ((pointerPos.y - stageY) / oldScale) * nextScale;
+
+    setStageScale(nextScale);
+    setStageX(newX);
+    setStageY(newY);
+  };
+
+  const handleStageDragEnd = (e: Konva.KonvaEventObject<DragEvent>) => {
+    if (e.target === stageRef.current) {
+      setStageX(e.target.x());
+      setStageY(e.target.y());
+    }
+  };
 
   return (
     <div ref={containerRef} className="relative h-full w-full rounded-lg border border-gray-200 bg-white overflow-hidden">
@@ -473,6 +560,9 @@ const InputPlanCanvas: React.FC<InputPlanCanvasProps> = ({
         scaleY={stageScale}
         x={stageX}
         y={stageY}
+        draggable
+        onWheel={handleWheel}
+        onDragEnd={handleStageDragEnd}
         onMouseMove={updateRoadPreview}
         onMouseDown={handleRoadPointerDown}
         onContextMenu={handleContextMenu}
@@ -483,6 +573,13 @@ const InputPlanCanvas: React.FC<InputPlanCanvasProps> = ({
           blurRadius={5}
           opacity={isBlurred ? 0.6 : 1}
         >
+          <GridLayer 
+            width={dimensions.width} 
+            height={dimensions.height} 
+            stageScale={stageScale} 
+            stageX={stageX} 
+            stageY={stageY} 
+          />
           {placedRoadPolygon && (
             <React.Fragment>
               <Line
@@ -765,6 +862,9 @@ const InputPlanCanvas: React.FC<InputPlanCanvasProps> = ({
             >
               Remove border line
             </button>
+            <div className="px-2 py-1 text-[10px] uppercase tracking-wider font-bold rounded bg-gray-100 text-gray-500 border border-gray-200 self-center">
+              Grid Snap: 0.1m
+            </div>
           </div>
         )}
       <div className="absolute top-3 right-3 flex flex-col gap-2">
