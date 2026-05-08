@@ -1,5 +1,5 @@
 import React, { useCallback, useEffect, useMemo, useRef, useState } from "react";
-import { Circle, Layer, Line, Rect, Stage, Text } from "react-konva";
+import { Circle, Layer, Line, Rect, Stage, Text, Arrow, Group } from "react-konva";
 import Konva from "konva";
 import { formatLengthFromCm, cmToM, mToCm } from "../../utils/units";
 import {
@@ -208,6 +208,17 @@ const InputPlanCanvas: React.FC<InputPlanCanvasProps> = ({
     [orderedKeys, points],
   );
 
+  const centroid = useMemo(() => {
+    if (orderedKeys.length === 0) return { x: 0, y: 0 };
+    let sumX = 0;
+    let sumY = 0;
+    orderedKeys.forEach((k) => {
+      sumX += cmToM(points[k].x);
+      sumY += cmToM(points[k].y);
+    });
+    return { x: sumX / orderedKeys.length, y: sumY / orderedKeys.length };
+  }, [orderedKeys, points]);
+
   const polygon = useMemo(
     () => orderedKeys.flatMap((key) => [cmToM(points[key].x), cmToM(points[key].y)]),
     [orderedKeys, points],
@@ -274,7 +285,7 @@ const InputPlanCanvas: React.FC<InputPlanCanvasProps> = ({
     const availableHeight = Math.max(1, dimensions.height - FIT_PADDING * 2);
 
     const nextScale = clamp(
-      Math.min(availableWidth / bboxWidth, availableHeight / bboxHeight),
+      Math.min(availableWidth / bboxWidth, availableHeight / bboxHeight) * 0.9,
       MIN_VIEW_SCALE,
       MAX_VIEW_SCALE,
     );
@@ -569,6 +580,80 @@ const InputPlanCanvas: React.FC<InputPlanCanvasProps> = ({
             />
           )}
 
+          {/* Dimension Lines */}
+          {orderedKeys.map((key, idx) => {
+            const nextKey = orderedKeys[(idx + 1) % orderedKeys.length];
+            const p1 = points[key];
+            const p2 = points[nextKey];
+
+            const m1x = cmToM(p1.x);
+            const m1y = cmToM(p1.y);
+            const m2x = cmToM(p2.x);
+            const m2y = cmToM(p2.y);
+
+            const midX = (m1x + m2x) / 2;
+            const midY = (m1y + m2y) / 2;
+
+            const dx = m2x - m1x;
+            const dy = m2y - m1y;
+            const len = Math.sqrt(dx * dx + dy * dy);
+            if (len < 0.1) return null;
+
+            // Unit normal
+            const nx = -dy / len;
+            const ny = dx / len;
+
+            // Vector from centroid to midpoint
+            const vx = midX - centroid.x;
+            const vy = midY - centroid.y;
+
+            // Dot product to ensure normal points outward
+            const dot = nx * vx + ny * vy;
+            const outNx = dot > 0 ? nx : -nx;
+            const outNy = dot > 0 ? ny : -ny;
+
+            const offsetDist = 30 / stageScale;
+            const x1 = m1x + outNx * offsetDist;
+            const y1 = m1y + outNy * offsetDist;
+            const x2 = m2x + outNx * offsetDist;
+            const y2 = m2y + outNy * offsetDist;
+
+            // Position label slightly further out from the dimension line
+            const labelX = midX + outNx * (offsetDist + 20 / stageScale);
+            const labelY = midY + outNy * (offsetDist + 20 / stageScale);
+
+            let textRotation = (Math.atan2(dy, dx) * 180) / Math.PI;
+            if (textRotation > 90) textRotation -= 180;
+            if (textRotation < -90) textRotation += 180;
+
+            return (
+              <Group key={`dim-${key}`}>
+                <Arrow
+                  points={[x1, y1, x2, y2]}
+                  pointerAtBeginning
+                  pointerAtEnding
+                  pointerWidth={6 / stageScale}
+                  pointerLength={6 / stageScale}
+                  stroke="#64748b"
+                  strokeWidth={1 / stageScale}
+                />
+                <Text
+                  x={labelX}
+                  y={labelY}
+                  text={`${cmToM(wallLengths[key]).toFixed(2)}m`}
+                  fontSize={15 / stageScale}
+                  fill="#1e293b"
+                  fontStyle="bold"
+                  align="center"
+                  verticalAlign="middle"
+                  rotation={textRotation}
+                  offsetX={30 / stageScale}
+                  offsetY={8 / stageScale}
+                />
+              </Group>
+            );
+          })}
+
           {orderedKeys.map((key) => {
             const point = points[key];
             const mx = cmToM(point.x);
@@ -593,8 +678,9 @@ const InputPlanCanvas: React.FC<InputPlanCanvasProps> = ({
                 <Text
                   x={mx + 10 / stageScale}
                   y={my - 20 / stageScale}
-                  text={`${key} (${mx.toFixed(2)}m, ${my.toFixed(2)}m)`}
-                  fontSize={12 / stageScale}
+                  text={key}
+                  fontSize={14 / stageScale}
+                  fontStyle="bold"
                   fill="#1f2937"
                 />
               </React.Fragment>
