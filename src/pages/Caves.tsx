@@ -1,6 +1,6 @@
 import React, { useEffect, useMemo, useRef, useState } from "react";
 import CavesCanvas from "../components/Konva/CavesCanvas";
-import type { RoomPoints, CornerKey } from "../components/Konva/InputPlanCanvas";
+import type { RoomPoints, CornerKey, PointHint } from "../components/Konva/InputPlanCanvas";
 import {
   calculatePolygonArea,
   calculatePolygonCentroid,
@@ -31,6 +31,7 @@ import ConfigureRoomsModal, {
   type SubmittedRoomRequirements,
 } from "../components/ConfigureRoomsModal";
 import { subscribeToJobEvents } from "../api/client";
+import { cancelJob } from "../api/jobs";
 import LoadingOverlay from "../components/LoadingOverlay";
 
 const KEYS: CornerKey[] = ["A", "B", "C", "D", "E", "F"];
@@ -102,6 +103,7 @@ const Caves: React.FC = () => {
   const [floorPlanEvent, setFloorPlanEvent] = useState<JobEventPayload | null>(null);
   const [floorPlanJobId, setFloorPlanJobId] = useState<string | null>(null);
   const floorPlanEventSourceRef = useRef<EventSource | null>(null);
+  const [pointHints, setPointHints] = useState<PointHint[] | null>(null);
   const [aspectRatio, setAspectRatio] = useState<string>("1:1");
 
   const orderedKeys = useMemo(() => KEYS.slice(0, borderCount), [borderCount]);
@@ -450,6 +452,18 @@ const Caves: React.FC = () => {
     }
   };
 
+  const handleCancelFloorPlanJob = async () => {
+    if (!floorPlanJobId) return;
+    try {
+      await cancelJob(floorPlanJobId);
+      closeFloorPlanStream();
+      setIsGeneratingFloorPlan(false);
+      setFloorPlanStatus("Job cancelled by user.");
+    } catch (error) {
+      console.error("Failed to cancel job:", error);
+    }
+  };
+
   const handleGenerateFloorPlan = async () => {
     if (!submittedRequirements || isGeneratingFloorPlan || isRunningAlgorithm) return;
 
@@ -460,6 +474,7 @@ const Caves: React.FC = () => {
     setFloorPlanStatus("Submitting floor plan job...");
     setFloorPlanEvent(null);
     setFloorPlanJobId(null);
+    setPointHints(null);
 
     setSegments(null);
     setLabels(null);
@@ -481,6 +496,10 @@ const Caves: React.FC = () => {
         (event) => {
           setFloorPlanEvent(event);
           setFloorPlanStatus(eventDisplay(event));
+
+          if (event.data && typeof event.data === "object" && "point_hints" in event.data) {
+            setPointHints(event.data.point_hints as PointHint[]);
+          }
 
           if (isTerminalEvent(event.event)) {
             closeFloorPlanStream();
@@ -542,6 +561,7 @@ const Caves: React.FC = () => {
                 openings,
                 isLoading: isGeneratingFloorPlan,
                 status: floorPlanStatus,
+                pointHints: pointHints,
               }}
             />
             <LoadingOverlay
@@ -551,6 +571,7 @@ const Caves: React.FC = () => {
                 floorPlanJobId ? `Job ID: ${floorPlanJobId}` : "Waiting for server response"
               }
               event={floorPlanEvent}
+              onCancel={handleCancelFloorPlanJob}
             />
           </div>
         </div>

@@ -17,6 +17,13 @@ export interface RoomPoint {
 }
 
 export type RoomPoints = Record<CornerKey, RoomPoint>;
+export interface PointHint {
+  name: string;
+  type: string;
+  x: number;
+  y: number;
+  radius: number;
+}
 
 interface InputPlanCanvasProps {
   points: RoomPoints;
@@ -32,6 +39,8 @@ interface InputPlanCanvasProps {
   onPointsChange: (next: RoomPoints) => void;
   onRoadPlace?: (placement: RoadPlacement) => void;
   onRoadCancel?: () => void;
+  isBlurred?: boolean;
+  pointHints?: PointHint[] | null;
 }
 
 const ALL_KEYS: CornerKey[] = ["A", "B", "C", "D", "E", "F"];
@@ -124,6 +133,18 @@ const LABEL_STYLE = {
   cornerRadius: 4,
 };
 
+const ROOM_COLORS: Record<string, string> = {
+  bedroom: "#3b82f6", // blue
+  kitchen: "#ef4444", // red
+  bathroom: "#06b6d4", // cyan
+  diningRoom: "#f59e0b", // amber
+  garage: "#64748b", // slate
+  veranda: "#10b981", // emerald
+  livingRoom: "#8b5cf6", // violet
+  hallway: "#f97316", // orange
+  attachedBathroom: "#0ea5e9", // sky
+};
+
 const InputPlanCanvas: React.FC<InputPlanCanvasProps> = ({
   points,
   borderCount,
@@ -138,9 +159,12 @@ const InputPlanCanvas: React.FC<InputPlanCanvasProps> = ({
   onPointsChange,
   onRoadPlace,
   onRoadCancel,
+  isBlurred = false,
+  pointHints = null,
 }) => {
   const containerRef = useRef<HTMLDivElement>(null);
   const stageRef = useRef<Konva.Stage>(null);
+  const backgroundLayerRef = useRef<Konva.Layer>(null);
   const [active, setActive] = useState<CornerKey | null>(null);
   const [previewRoad, setPreviewRoad] = useState<RoadPlacement | null>(null);
   const [dimensions, setDimensions] = useState({ width: DEFAULT_WIDTH, height: DEFAULT_HEIGHT });
@@ -269,6 +293,14 @@ const InputPlanCanvas: React.FC<InputPlanCanvasProps> = ({
 
     fitToGeometry();
   }, [fitToGeometry, dimensions.width, dimensions.height, editable, active]);
+
+  useEffect(() => {
+    if (isBlurred && backgroundLayerRef.current) {
+      backgroundLayerRef.current.cache();
+    } else if (backgroundLayerRef.current) {
+      backgroundLayerRef.current.clearCache();
+    }
+  }, [isBlurred, points, borderCount, placedRoad, buildableRectangle, shrunkBoundary]);
 
   const getPointerInCanvas = (): RoomPoint | null => {
     const stage = stageRef.current;
@@ -434,7 +466,12 @@ const InputPlanCanvas: React.FC<InputPlanCanvasProps> = ({
         onMouseDown={handleRoadPointerDown}
         onContextMenu={handleContextMenu}
       >
-        <Layer>
+        <Layer 
+          ref={backgroundLayerRef}
+          filters={isBlurred ? [Konva.Filters.Blur] : []}
+          blurRadius={5}
+          opacity={isBlurred ? 0.6 : 1}
+        >
           {placedRoadPolygon && (
             <React.Fragment>
               <Line
@@ -573,7 +610,7 @@ const InputPlanCanvas: React.FC<InputPlanCanvasProps> = ({
             fontSize={13 / stageScale}
             fill="#334155"
           />
-          {!editable && (
+          {!editable && !isBlurred && (
             <Text
               x={(16 - stageX) / stageScale}
               y={(34 - stageY) / stageScale}
@@ -583,25 +620,67 @@ const InputPlanCanvas: React.FC<InputPlanCanvasProps> = ({
             />
           )}
         </Layer>
-      </Stage>
-      <div className="absolute bottom-3 left-3 flex gap-2">
-        <button
-          type="button"
-          onClick={addPointOnLastEdge}
-          disabled={!editable || borderCount >= ALL_KEYS.length}
-          className="px-2 py-1 text-xs rounded bg-blue-600 text-white disabled:opacity-50 disabled:cursor-not-allowed"
-        >
-          Add border line
-        </button>
-        <button
-          type="button"
-          onClick={removeLastPoint}
-          disabled={!editable || borderCount <= 4}
-          className="px-2 py-1 text-xs rounded bg-slate-600 text-white disabled:opacity-50 disabled:cursor-not-allowed"
-        >
-          Remove border line
-        </button>
-      </div>
+        
+          {pointHints && pointHints.length > 0 && (
+            <Layer>
+              {pointHints.map((hint, idx) => {
+                // Server provides x, y in units where 1 unit = 10cm
+                // InputPlanCanvas renders in Meters.
+                // hint.x * 10 = CM, CM / 100 = Meters => hint.x / 10 = Meters
+                const x = hint.x / 10;
+                const y = hint.y / 10;
+                const color = ROOM_COLORS[hint.type] || ROOM_COLORS.default || "#94a3b8";
+                const boxSize = 24 / stageScale; // Increased size slightly
+                
+                return (
+                  <React.Fragment key={`hint-${idx}-${hint.name}`}>
+                    <Rect
+                      x={x - boxSize / 2}
+                      y={y - boxSize / 2}
+                      width={boxSize}
+                      height={boxSize}
+                      fill={color}
+                      stroke="white"
+                      strokeWidth={2 / stageScale}
+                      shadowColor="black"
+                      shadowBlur={4 / stageScale}
+                      shadowOpacity={0.3}
+                    />
+                    <Text
+                      x={x + boxSize / 2 + 4 / stageScale}
+                      y={y - 6 / stageScale}
+                      text={hint.name}
+                      fontSize={12 / stageScale}
+                      fontStyle="bold"
+                      fill="#334155"
+                      listening={false}
+                    />
+                  </React.Fragment>
+                );
+              })}
+            </Layer>
+          )}
+        </Stage>
+        {!isBlurred && (
+          <div className="absolute bottom-3 left-3 flex gap-2">
+            <button
+              type="button"
+              onClick={addPointOnLastEdge}
+              disabled={!editable || borderCount >= ALL_KEYS.length}
+              className="px-2 py-1 text-xs rounded bg-blue-600 text-white disabled:opacity-50 disabled:cursor-not-allowed"
+            >
+              Add border line
+            </button>
+            <button
+              type="button"
+              onClick={removeLastPoint}
+              disabled={!editable || borderCount <= 4}
+              className="px-2 py-1 text-xs rounded bg-slate-600 text-white disabled:opacity-50 disabled:cursor-not-allowed"
+            >
+              Remove border line
+            </button>
+          </div>
+        )}
       <div className="absolute top-3 right-3 flex flex-col gap-2">
         <button
           onClick={handleZoomIn}

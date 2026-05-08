@@ -5,6 +5,7 @@ import type { RoadPlacement } from "./utils/geometry";
 import type { UsableLandPoint } from "../../api/getUsableLand";
 import type { Coordinate, Label } from "./shapes/types";
 import type { CanvasOpening } from "../../types";
+import type { PointHint } from "./InputPlanCanvas";
 
 interface CavesCanvasProps {
   mode: "edit" | "view";
@@ -31,6 +32,7 @@ interface CavesCanvasProps {
     openings: CanvasOpening[] | null;
     isLoading: boolean;
     status: string | null;
+    pointHints: PointHint[] | null;
   };
 }
 
@@ -57,9 +59,19 @@ const CavesCanvas: React.FC<CavesCanvasProps> = ({ mode, editState, editActions,
 
   if (viewState.isLoading) {
     return (
-      <div className="flex h-full items-center justify-center rounded border border-slate-200 bg-white text-sm text-slate-700">
-        Generating floor plan...
-      </div>
+      <InputPlanCanvas
+        points={editState.points}
+        borderCount={editState.borderCount}
+        editable={false}
+        roadMode="idle"
+        placedRoad={editState.placedRoad}
+        buildableRectangle={editState.buildableRectangle}
+        buildableRectangleSides={editState.buildableRectangleSides}
+        shrunkBoundary={editState.shrunkBoundary}
+        onPointsChange={() => {}}
+        isBlurred={true}
+        pointHints={viewState.pointHints}
+      />
     );
   }
 
