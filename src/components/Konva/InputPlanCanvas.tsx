@@ -437,8 +437,8 @@ const InputPlanCanvas: React.FC<InputPlanCanvasProps> = ({
     
     // Snap to grid: 0.1m = 10cm
     const candidate = {
-      x: clamp(snapToGrid(mToCm(mx)), 0, 1000000),
-      y: clamp(snapToGrid(mToCm(my)), 0, 1000000),
+      x: snapToGrid(mToCm(mx)),
+      y: snapToGrid(mToCm(my)),
     };
 
     const next = { ...points, [key]: candidate };
@@ -473,8 +473,8 @@ const InputPlanCanvas: React.FC<InputPlanCanvasProps> = ({
 
     const offset = Math.max(24, len * 0.15);
     const candidate = {
-      x: clamp(snapToGrid(mx + nx * offset), PADDING, 1000000),
-      y: clamp(snapToGrid(my + ny * offset), PADDING, 1000000),
+      x: snapToGrid(mx + nx * offset),
+      y: snapToGrid(my + ny * offset),
     };
 
     const next = { ...points, [newKey]: candidate };
@@ -486,8 +486,8 @@ const InputPlanCanvas: React.FC<InputPlanCanvasProps> = ({
     }
 
     const alt = {
-      x: clamp(snapToGrid(mx - nx * offset), PADDING, 1000000),
-      y: clamp(snapToGrid(my - ny * offset), PADDING, 1000000),
+      x: snapToGrid(mx - nx * offset),
+      y: snapToGrid(my - ny * offset),
     };
     const nextAlt = { ...points, [newKey]: alt };
     if (isValidPolygon(nextAlt, nextOrder)) {

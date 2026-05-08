@@ -65,8 +65,6 @@ const Canvas: React.FC = () => {
     F: { x: 520, y: 300 },
   });
   const [borderCount, setBorderCount] = useState(4);
-  const [isConfirmed, setIsConfirmed] = useState(false);
-  const [confirmedBasePoints, setConfirmedBasePoints] = useState<RoomPoints | null>(null);
   const [targetAreaInput, setTargetAreaInput] = useState<string>("");
   const [lastAppliedArea, setLastAppliedArea] = useState<number | null>(null);
   const [scaleError, setScaleError] = useState<string | null>(null);
@@ -121,6 +119,11 @@ const Canvas: React.FC = () => {
       })
       .join(" | ");
   }, [orderedKeys, points]);
+
+  // Auto-update target area input whenever current area changes
+  useEffect(() => {
+    setTargetAreaInput((currentArea / 10000).toFixed(2));
+  }, [currentArea]);
 
   const clearAlgorithmResultState = () => {
     setBuildableRectangleVertices(null);
@@ -202,14 +205,14 @@ const Canvas: React.FC = () => {
   }, []);
 
   const addBorderLine = () => {
-    if (isConfirmed || borderCount >= MAX_BORDERS) return;
+    if (isRunningAlgorithm || isGeneratingFloorPlan || borderCount >= MAX_BORDERS) return;
     setBorderCount((prev) => Math.min(MAX_BORDERS, prev + 1));
     clearAlgorithmResultState();
     invalidateFloorPlanFromStepA();
   };
 
   const removeBorderLine = () => {
-    if (isConfirmed || borderCount <= MIN_BORDERS) return;
+    if (isRunningAlgorithm || isGeneratingFloorPlan || borderCount <= MIN_BORDERS) return;
     setBorderCount((prev) => Math.max(MIN_BORDERS, prev - 1));
     clearAlgorithmResultState();
     invalidateFloorPlanFromStepA();
@@ -221,31 +224,8 @@ const Canvas: React.FC = () => {
     invalidateFloorPlanFromStepA();
   };
 
-  const handleConfirmShape = () => {
-    if (isRunningAlgorithm || isGeneratingFloorPlan) return;
-    setIsConfirmed(true);
-    setConfirmedBasePoints(points);
-  };
-
-  const handleEditShape = () => {
-    if (isRunningAlgorithm || isGeneratingFloorPlan) return;
-    setIsConfirmed(false);
-    if (confirmedBasePoints) {
-      setPoints(confirmedBasePoints);
-    }
-    setConfirmedBasePoints(null);
-    setTargetAreaInput("");
-    setLastAppliedArea(null);
-    setScaleError(null);
-    setRoadMode("idle");
-    setPlacedRoads([]);
-    clearAlgorithmResultState();
-    invalidateFloorPlanFromStepA();
-  };
-
   const handleApplyArea = () => {
     if (isRunningAlgorithm || isGeneratingFloorPlan) return;
-    if (!confirmedBasePoints) return;
 
     const targetAreaCm2 = parseAreaM2InputToCm2(targetAreaInput);
     if (targetAreaCm2 === null || targetAreaCm2 <= 0) {
@@ -253,15 +233,15 @@ const Canvas: React.FC = () => {
       return;
     }
 
-    const baseArea = calculatePolygonArea(confirmedBasePoints, orderedKeys);
+    const baseArea = calculatePolygonArea(points, orderedKeys);
     if (baseArea <= 0) {
       setScaleError("Base polygon has zero area.");
       return;
     }
 
     const scale = Math.sqrt(targetAreaCm2 / baseArea);
-    const centroid = calculatePolygonCentroid(confirmedBasePoints, orderedKeys);
-    const scaledPoints = scalePolygon(confirmedBasePoints, orderedKeys, centroid, scale);
+    const centroid = calculatePolygonCentroid(points, orderedKeys);
+    const scaledPoints = scalePolygon(points, orderedKeys, centroid, scale);
 
     setPoints(scaledPoints);
     setLastAppliedArea(targetAreaCm2);
@@ -272,7 +252,6 @@ const Canvas: React.FC = () => {
 
   const handleRoadButtonClick = () => {
     if (isRunningAlgorithm || isGeneratingFloorPlan) return;
-    if (!isConfirmed || lastAppliedArea === null) return;
     setRoadMode((prev) => (prev === "placing" ? "idle" : "placing"));
   };
 
@@ -541,7 +520,7 @@ const Canvas: React.FC = () => {
               editState={{
                 points,
                 borderCount,
-                editable: !isConfirmed,
+                editable: canvasMode === "edit" && !isRunningAlgorithm && !isGeneratingFloorPlan,
                 roadMode,
                 placedRoad: placedRoads[0] ?? null,
                 buildableRectangle: buildableRectangleVertices,
@@ -582,107 +561,81 @@ const Canvas: React.FC = () => {
               <h2 className="mb-2 text-sm font-semibold text-slate-800">Step A: Land Setup</h2>
               <div className="text-xs text-slate-600">Land border lines: {borderCount}</div>
               <div className="mt-1 wrap-break-word text-xs text-slate-500">{shapeSummary}</div>
-              <div className="mt-3 flex gap-2">
-                <button
-                  onClick={handleConfirmShape}
-                  disabled={isConfirmed || isRunningAlgorithm || isGeneratingFloorPlan}
-                  className="rounded bg-emerald-600 px-3 py-2 text-sm text-white hover:bg-emerald-700 disabled:cursor-not-allowed disabled:opacity-50"
-                >
-                  Confirm Shape
-                </button>
-                <button
-                  onClick={handleEditShape}
-                  disabled={!isConfirmed || isRunningAlgorithm || isGeneratingFloorPlan}
-                  className="rounded bg-amber-500 px-3 py-2 text-sm text-white hover:bg-amber-600 disabled:cursor-not-allowed disabled:opacity-50"
-                >
-                  Edit
-                </button>
-              </div>
-            </section>
+              
+              <div className="mt-4 flex flex-col gap-3">
+                <div className="text-xs text-slate-600 border-t pt-3">
+                  Current Area:{" "}
+                  <span className="font-semibold">{formatAreaFromCm2(currentArea, 2)}</span>
+                </div>
 
-            <section className="rounded-md border border-slate-200 p-3">
-              <h3 className="mb-2 text-sm font-semibold text-slate-800">Target Land Area</h3>
-              {!isConfirmed ? (
-                <p className="text-xs text-slate-500">Confirm shape to set target land area.</p>
-              ) : (
-                <div className="flex flex-col gap-3">
-                  <div className="text-xs text-slate-600">
-                    Current Area:{" "}
-                    <span className="font-semibold">{formatAreaFromCm2(currentArea, 2)}</span>
-                  </div>
+                <label className="flex flex-col gap-1 text-xs text-slate-700">
+                  Target Area (m2)
+                  <input
+                    type="number"
+                    min="1"
+                    step="any"
+                    value={targetAreaInput}
+                    onChange={(event) => setTargetAreaInput(event.target.value)}
+                    disabled={isRunningAlgorithm || isGeneratingFloorPlan}
+                    className="rounded border border-slate-300 px-3 py-2 text-sm"
+                    placeholder="e.g. 50"
+                  />
+                </label>
 
-                  <label className="flex flex-col gap-1 text-xs text-slate-700">
-                    Target Area (m2)
-                    <input
-                      type="number"
-                      min="1"
-                      step="any"
-                      value={targetAreaInput}
-                      onChange={(event) => setTargetAreaInput(event.target.value)}
-                      disabled={isRunningAlgorithm || isGeneratingFloorPlan}
-                      className="rounded border border-slate-300 px-3 py-2 text-sm"
-                      placeholder="e.g. 50"
-                    />
-                  </label>
+                {scaleError && <div className="text-xs text-red-600">{scaleError}</div>}
 
-                  {scaleError && <div className="text-xs text-red-600">{scaleError}</div>}
-
+                <div className="flex gap-2">
                   <button
                     onClick={handleApplyArea}
                     disabled={isRunningAlgorithm || isGeneratingFloorPlan}
-                    className="w-full rounded bg-blue-600 px-3 py-2 text-sm text-white hover:bg-blue-700"
+                    className="flex-1 rounded bg-blue-600 px-3 py-2 text-sm text-white hover:bg-blue-700"
                   >
                     Apply Area
                   </button>
-
+                  
                   <button
                     onClick={handleRoadButtonClick}
-                    disabled={
-                      !isConfirmed ||
-                      lastAppliedArea === null ||
-                      isRunningAlgorithm ||
-                      isGeneratingFloorPlan
-                    }
-                    className="w-full rounded bg-slate-700 px-3 py-2 text-sm text-white hover:bg-slate-800 disabled:cursor-not-allowed disabled:opacity-50"
+                    disabled={isRunningAlgorithm || isGeneratingFloorPlan}
+                    className="flex-1 rounded bg-slate-700 px-3 py-2 text-sm text-white hover:bg-slate-800 disabled:cursor-not-allowed disabled:opacity-50"
                   >
                     {roadMode === "placing" ? "Cancel Road" : "Add Road"}
                   </button>
-
-                  {roadMode === "placing" && (
-                    <div className="text-[11px] text-slate-600">
-                      Place Road mode active. Hover near a boundary segment, left click to place,
-                      right click to cancel.
-                    </div>
-                  )}
-
-                  {placedRoads.length > 0 && roadMode !== "placing" && (
-                    <div className="text-[11px] text-emerald-700">
-                      Road placed on border segment {placedRoads[0].segmentIndex + 1}.
-                    </div>
-                  )}
-
-                  {placedRoads.length > 0 && (
-                    <button
-                      onClick={handleRunAlgorithm}
-                      disabled={isRunningAlgorithm || isGeneratingFloorPlan}
-                      className="w-full rounded bg-indigo-600 px-3 py-2 text-sm text-white hover:bg-indigo-700 disabled:cursor-not-allowed disabled:opacity-50"
-                    >
-                      {isRunningAlgorithm ? "Running..." : "Run Algorithm"}
-                    </button>
-                  )}
-
-                  {runAlgoStatus && (
-                    <div className="text-[11px] text-indigo-700">{runAlgoStatus}</div>
-                  )}
-
-                  {buildableRectangleSize && (
-                    <div className="rounded border border-emerald-200 bg-emerald-50 p-2 text-xs text-emerald-800">
-                      Usable rectangle: {formatLengthFromCm(buildableRectangleSize.width, 2)} x{" "}
-                      {formatLengthFromCm(buildableRectangleSize.height, 2)}
-                    </div>
-                  )}
                 </div>
-              )}
+
+                {roadMode === "placing" && (
+                  <div className="text-[11px] text-slate-600">
+                    Place Road mode active. Hover near a boundary segment, left click to place,
+                    right click to cancel.
+                  </div>
+                )}
+
+                {placedRoads.length > 0 && roadMode !== "placing" && (
+                  <div className="text-[11px] text-emerald-700">
+                    Road placed on border segment {placedRoads[0].segmentIndex + 1}.
+                  </div>
+                )}
+
+                {placedRoads.length > 0 && (
+                  <button
+                    onClick={handleRunAlgorithm}
+                    disabled={isRunningAlgorithm || isGeneratingFloorPlan}
+                    className="w-full rounded bg-indigo-600 px-3 py-2 text-sm text-white hover:bg-indigo-700 disabled:cursor-not-allowed disabled:opacity-50"
+                  >
+                    {isRunningAlgorithm ? "Running..." : "Run Algorithm"}
+                  </button>
+                )}
+
+                {runAlgoStatus && (
+                  <div className="text-[11px] text-indigo-700">{runAlgoStatus}</div>
+                )}
+
+                {buildableRectangleSize && (
+                  <div className="rounded border border-emerald-200 bg-emerald-50 p-2 text-xs text-emerald-800">
+                    Usable rectangle: {formatLengthFromCm(buildableRectangleSize.width, 2)} x{" "}
+                    {formatLengthFromCm(buildableRectangleSize.height, 2)}
+                  </div>
+                )}
+              </div>
             </section>
 
             <section className="rounded-md border border-slate-200 p-3">
