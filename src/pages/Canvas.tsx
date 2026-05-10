@@ -66,7 +66,6 @@ const Canvas: React.FC = () => {
   });
   const [borderCount, setBorderCount] = useState(4);
   const [targetAreaInput, setTargetAreaInput] = useState<string>("");
-  const [lastAppliedArea, setLastAppliedArea] = useState<number | null>(null);
   const [scaleError, setScaleError] = useState<string | null>(null);
   const [roadMode, setRoadMode] = useState<"idle" | "placing">("idle");
   const [placedRoads, setPlacedRoads] = useState<RoadPlacement[]>([]);
@@ -173,8 +172,10 @@ const Canvas: React.FC = () => {
   };
 
   const buildTrialEventNames = (count: number): string[] => {
-    if (!Number.isFinite(count) || count <= 0) return [];
-    return Array.from({ length: Math.floor(count) + 1 }, (_, index) => `trial_${index}`);
+    // Use provided count, but ensure a minimum range of 500 trials
+    // to catch all server-generated trials even if optuna_trial_count is low
+    const maxTrials = Math.max(Math.floor(count) + 1, 500);
+    return Array.from({ length: maxTrials }, (_, index) => `trial_${index}`);
   };
 
   const eventDisplay = (event: JobEventPayload): string => {
@@ -244,7 +245,6 @@ const Canvas: React.FC = () => {
     const scaledPoints = scalePolygon(points, orderedKeys, centroid, scale);
 
     setPoints(scaledPoints);
-    setLastAppliedArea(targetAreaCm2);
     setScaleError(null);
     clearAlgorithmResultState();
     invalidateFloorPlanFromStepA();
@@ -468,7 +468,9 @@ const Canvas: React.FC = () => {
       setFloorPlanJobId(submission.job_id);
       setFloorPlanStatus(submission.message || `Floor plan job submitted (${submission.job_id}).`);
 
-      const trialEvents = buildTrialEventNames(submittedRequirements.payload.optuna_trial_count);
+      const trialEvents = buildTrialEventNames(
+        submittedRequirements.payload.optuna_trial_count ?? 0,
+      );
 
       floorPlanEventSourceRef.current = subscribeToJobEvents(
         submission.job_id,
@@ -561,7 +563,7 @@ const Canvas: React.FC = () => {
               <h2 className="mb-2 text-sm font-semibold text-slate-800">Step A: Land Setup</h2>
               <div className="text-xs text-slate-600">Land border lines: {borderCount}</div>
               <div className="mt-1 wrap-break-word text-xs text-slate-500">{shapeSummary}</div>
-              
+
               <div className="mt-4 flex flex-col gap-3">
                 <div className="text-xs text-slate-600 border-t pt-3">
                   Current Area:{" "}
@@ -592,7 +594,7 @@ const Canvas: React.FC = () => {
                   >
                     Apply Area
                   </button>
-                  
+
                   <button
                     onClick={handleRoadButtonClick}
                     disabled={isRunningAlgorithm || isGeneratingFloorPlan}

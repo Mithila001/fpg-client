@@ -48,6 +48,7 @@ export const jobEventTypes = [
   "time_out",
   "fpg_low_score",
   "message",
+  "solver_gate_not_passed",
 ];
 
 type JobEventHandler = (event: JobEventPayload & { eventName?: string; raw?: string }) => void;
@@ -71,13 +72,16 @@ export const subscribeToJobEvents = (
   extraEventTypes: string[] = [],
 ): EventSource => {
   const source = new EventSource(`${BASE_URL}/algorithms/job/${jobId}/events`);
+  const eventNames = Array.from(new Set([...jobEventTypes, ...extraEventTypes]));
+
+  source.addEventListener("open", () => {
+    // SSE stream opened
+  });
 
   const handler = (eventName: string) => (message: MessageEvent<string>) => {
     const payload = parseEventPayload(eventName, message);
     onEvent({ ...payload, eventName, raw: message.data });
   };
-
-  const eventNames = Array.from(new Set([...jobEventTypes, ...extraEventTypes]));
 
   eventNames.forEach((eventName) => {
     if (eventName === "message") {
@@ -88,8 +92,18 @@ export const subscribeToJobEvents = (
   });
 
   if (onError) {
-    source.addEventListener("error", onError);
+    source.addEventListener("error", (error) => {
+      onError(error);
+    });
   }
+
+  source.addEventListener("error", (error) => {
+    console.warn("[SSE] job event stream error (unhandled)", {
+      jobId,
+      readyState: source.readyState,
+      error,
+    });
+  });
 
   return source;
 };
