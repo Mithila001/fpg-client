@@ -548,9 +548,6 @@ const Canvas: React.FC = () => {
             <LoadingOverlay
               isOpen={isGeneratingFloorPlan}
               title="Generating Floor Plan"
-              subtitle={
-                floorPlanJobId ? `Job ID: ${floorPlanJobId}` : "Waiting for server response"
-              }
               event={floorPlanEvent}
               onCancel={handleCancelFloorPlanJob}
             />
