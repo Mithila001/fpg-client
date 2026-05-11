@@ -6,6 +6,15 @@ import type { UsableLandPoint } from "../../api/getUsableLand";
 import type { Coordinate, Label } from "./shapes/types";
 import type { CanvasOpening } from "../../types";
 import type { PointHint } from "./InputPlanCanvas";
+import type { ProcessedRoomData } from "../../types";
+import type { BuildableRectangleSides } from "../../api/getUsableLand";
+
+interface WorkspaceViewEffects {
+  roomDimensions?: {
+    enabled: boolean;
+    rooms: ProcessedRoomData[] | null;
+  };
+}
 
 interface WorkspaceCanvasProps {
   mode: "edit" | "view";
@@ -16,7 +25,7 @@ interface WorkspaceCanvasProps {
     roadMode: "idle" | "placing";
     placedRoad: RoadPlacement | null;
     buildableRectangle: UsableLandPoint[] | null;
-    buildableRectangleSides: any; // Using any for simplicity as it's a pass-through
+    buildableRectangleSides: BuildableRectangleSides | null;
     shrunkBoundary: UsableLandPoint[] | null;
   };
   editActions: {
@@ -34,9 +43,16 @@ interface WorkspaceCanvasProps {
     status: string | null;
     pointHints: PointHint[] | null;
   };
+  viewEffects?: WorkspaceViewEffects;
 }
 
-const WorkspaceCanvas: React.FC<WorkspaceCanvasProps> = ({ mode, editState, editActions, viewState }) => {
+const WorkspaceCanvas: React.FC<WorkspaceCanvasProps> = ({
+  mode,
+  editState,
+  editActions,
+  viewState,
+  viewEffects,
+}) => {
   if (mode === "edit") {
     return (
       <InputPlanCanvas
@@ -90,6 +106,7 @@ const WorkspaceCanvas: React.FC<WorkspaceCanvasProps> = ({ mode, editState, edit
       openings={viewState.openings ?? undefined}
       pxPerCm={0.01}
       wallThickness={6}
+      viewEffects={viewEffects}
     />
   );
 };

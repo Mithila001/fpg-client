@@ -1,10 +1,26 @@
-import React, { useState, useEffect, useRef, forwardRef, useImperativeHandle, useCallback } from "react";
-import { Stage, Layer, Circle, Text, Rect } from "react-konva";
+import React, {
+  useState,
+  useEffect,
+  useRef,
+  forwardRef,
+  useImperativeHandle,
+  useCallback,
+} from "react";
+import { Stage, Layer } from "react-konva";
 import Konva from "konva";
 import { Grid, Wall, Labels, Openings } from "./shapes";
 import type { Coordinate, Label } from "./shapes";
 import { cmToPx } from "../../utils/units";
 import type { CanvasOpening } from "../../types";
+import type { ProcessedRoomData } from "../../types";
+import RoomDimensionsOverlay from "./overlays/RoomDimensionsOverlay";
+
+interface CoordinateCanvasEffects {
+  roomDimensions?: {
+    enabled: boolean;
+    rooms: ProcessedRoomData[] | null;
+  };
+}
 
 interface CoordinateCanvasProps {
   segments?: Coordinate[][];
@@ -13,6 +29,7 @@ interface CoordinateCanvasProps {
   openings?: CanvasOpening[];
   pxPerCm?: number;
   wallThickness?: number;
+  viewEffects?: CoordinateCanvasEffects;
 }
 
 export interface CoordinateCanvasHandle {
@@ -27,7 +44,7 @@ const clamp = (value: number, min: number, max: number): number =>
   Math.min(max, Math.max(min, value));
 
 const CoordinateCanvas = forwardRef<CoordinateCanvasHandle, CoordinateCanvasProps>(
-  ({ segments, points, labels, openings, pxPerCm, wallThickness }, ref) => {
+  ({ segments, points, labels, openings, pxPerCm, wallThickness, viewEffects }, ref) => {
     const scale = pxPerCm ?? 1;
 
     let effectivePoints: Coordinate[] = [];
@@ -115,7 +132,11 @@ const CoordinateCanvas = forwardRef<CoordinateCanvasHandle, CoordinateCanvasProp
 
       const zoomSpeed = 0.1;
       const direction = e.evt.deltaY > 0 ? -1 : 1;
-      const nextScale = clamp(oldScale + direction * zoomSpeed * oldScale, MIN_VIEW_SCALE, MAX_VIEW_SCALE);
+      const nextScale = clamp(
+        oldScale + direction * zoomSpeed * oldScale,
+        MIN_VIEW_SCALE,
+        MAX_VIEW_SCALE,
+      );
 
       const newX = pointerPos.x - ((pointerPos.x - stageX) / oldScale) * nextScale;
       const newY = pointerPos.y - ((pointerPos.y - stageY) / oldScale) * nextScale;
@@ -179,7 +200,10 @@ const CoordinateCanvas = forwardRef<CoordinateCanvasHandle, CoordinateCanvasProp
     const viewEndY = (dimensions.height - stageY) / stageScale;
 
     return (
-      <div ref={containerRef} className="relative h-full w-full rounded-lg border border-gray-200 bg-white overflow-hidden">
+      <div
+        ref={containerRef}
+        className="relative h-full w-full rounded-lg border border-gray-200 bg-white overflow-hidden"
+      >
         {dimensions.width > 0 && (
           <Stage
             ref={stageRef}
@@ -194,12 +218,12 @@ const CoordinateCanvas = forwardRef<CoordinateCanvasHandle, CoordinateCanvasProp
             onDragEnd={handleDragEnd}
           >
             <Layer>
-              <Grid 
-                startX={viewStartX} 
-                endX={viewEndX} 
-                startY={viewStartY} 
-                endY={viewEndY} 
-                gridSize={gridSize} 
+              <Grid
+                startX={viewStartX}
+                endX={viewEndX}
+                startY={viewStartY}
+                endY={viewEndY}
+                gridSize={gridSize}
                 pxPerCm={scale}
                 stageScale={stageScale}
               />
@@ -217,25 +241,42 @@ const CoordinateCanvas = forwardRef<CoordinateCanvasHandle, CoordinateCanvasProp
                   />
                 ))
               ) : (
-                <Wall points={scaledPoints} thickness={cmToPx(wallThickness ?? 6, scale)} stageScale={stageScale} />
+                <Wall
+                  points={scaledPoints}
+                  thickness={cmToPx(wallThickness ?? 6, scale)}
+                  stageScale={stageScale}
+                />
               )}
 
               {scaledLabels && <Labels labels={scaledLabels} stageScale={stageScale} />}
 
               {openings && openings.length > 0 && (
-                <Openings 
-                  openings={openings.map(o => ({
+                <Openings
+                  openings={openings.map((o) => ({
                     ...o,
                     y1: -o.y1,
                     y2: -o.y2,
-                  }))} 
-                  pxPerCm={scale} 
-                  offsetX={0} 
+                  }))}
+                  pxPerCm={scale}
+                  offsetX={0}
                   offsetY={0}
                   stageScale={stageScale}
                 />
               )}
             </Layer>
+
+            {viewEffects?.roomDimensions?.enabled &&
+              viewEffects.roomDimensions.rooms &&
+              viewEffects.roomDimensions.rooms.length > 0 && (
+                <Layer>
+                  <RoomDimensionsOverlay
+                    rooms={viewEffects.roomDimensions.rooms}
+                    pxPerCm={scale}
+                    stageScale={stageScale}
+                    precision={1}
+                  />
+                </Layer>
+              )}
           </Stage>
         )}
 
@@ -264,8 +305,7 @@ const CoordinateCanvas = forwardRef<CoordinateCanvasHandle, CoordinateCanvasProp
         </div>
       </div>
     );
-  }
+  },
 );
 
 export default CoordinateCanvas;
-

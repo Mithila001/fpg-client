@@ -44,18 +44,25 @@ export const submitFormatV2Job = async (
 export const fetchFormatV2JobState = async (
   jobId: string,
 ): Promise<JobStateResponse<FormatV2Result>> => {
-  const state = await fetchJobState<any>(jobId);
+  const state = await fetchJobState<unknown>(jobId);
 
-  if (state.result && typeof state.result === "object" && "result" in state.result) {
-    if (state.result.result && state.result.result.union_results) {
-      state.result = state.result.result;
-    }
+  const nestedResult =
+    state.result && typeof state.result === "object" && "result" in state.result
+      ? (state.result as { result?: unknown }).result
+      : undefined;
+
+  if (nestedResult && typeof nestedResult === "object" && "union_results" in nestedResult) {
+    state.result = nestedResult;
   }
 
   if (!state.result && state.events && Array.isArray(state.events)) {
-    const successEvent = state.events.find((e: any) => e.event === "success");
-    if (successEvent?.data?.result) {
-      state.result = successEvent.data.result;
+    const successEvent = state.events.find((e) => e.event === "success");
+    const successData =
+      successEvent && typeof successEvent.data === "object" && successEvent.data !== null
+        ? (successEvent.data as { result?: FormatV2Result })
+        : undefined;
+    if (successData?.result) {
+      state.result = successData.result;
       state.status = "COMPLETED"; // Force status to COMPLETED if success event exists
     }
   }
@@ -67,7 +74,7 @@ const openingTypeToKind = (openingType: string): "window" | "door" => {
   return openingType.toLowerCase().includes("window") ? "window" : "door";
 };
 
-const centroidFromVertices = (vertices: Array<any>): Coordinate | null => {
+const centroidFromVertices = (vertices: Array<unknown>): Coordinate | null => {
   if (!vertices || vertices.length === 0) return null;
 
   let minX = Infinity;
@@ -76,12 +83,14 @@ const centroidFromVertices = (vertices: Array<any>): Coordinate | null => {
   let maxY = -Infinity;
 
   for (const v of vertices) {
-    let x, y;
+    let x: unknown;
+    let y: unknown;
     if (Array.isArray(v)) {
       [x, y] = v;
     } else if (v && typeof v === "object") {
-      x = v.x;
-      y = v.y;
+      const point = v as { x?: unknown; y?: unknown };
+      x = point.x;
+      y = point.y;
     }
     if (typeof x === "number" && typeof y === "number") {
       minX = Math.min(minX, x);
@@ -99,7 +108,7 @@ const centroidFromVertices = (vertices: Array<any>): Coordinate | null => {
   };
 };
 
-const roomsFromResult = (result: FormatV2Result): ProcessedRoomData[] => {
+export const roomsFromResult = (result: FormatV2Result): ProcessedRoomData[] => {
   return result.union_results.floor_plan_with_openings.floor_plan ?? [];
 };
 

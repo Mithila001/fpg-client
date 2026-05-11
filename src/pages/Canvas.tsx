@@ -21,6 +21,7 @@ import {
   fetchFormatV2JobState,
   formatResultToSegments,
   roomCentersFromResult,
+  roomsFromResult,
   roomsToLabels,
   roomsToOpenings,
 } from "../api/floorPlan";
@@ -34,6 +35,7 @@ import { subscribeToJobEvents } from "../api/client";
 import { cancelJob } from "../api/jobs";
 import LoadingOverlay from "../components/LoadingOverlay";
 import type { FormatV2Result, JobStateResponse } from "../types";
+import type { ProcessedRoomData } from "../types";
 
 const KEYS: CornerKey[] = ["A", "B", "C", "D", "E", "F"];
 const MIN_BORDERS = 4;
@@ -94,6 +96,7 @@ const Canvas: React.FC = () => {
   const [labels, setLabels] = useState<Label[] | null>(null);
   const [openings, setOpenings] = useState<CanvasOpening[] | null>(null);
   const [roomCenters, setRoomCenters] = useState<Coordinate[] | null>(null);
+  const [floorPlanRooms, setFloorPlanRooms] = useState<ProcessedRoomData[] | null>(null);
   const [isGeneratingFloorPlan, setIsGeneratingFloorPlan] = useState(false);
   const [floorPlanStatus, setFloorPlanStatus] = useState<string | null>(null);
   const [floorPlanError, setFloorPlanError] = useState<string | null>(null);
@@ -103,6 +106,7 @@ const Canvas: React.FC = () => {
   const floorPlanEventSourceRef = useRef<EventSource | null>(null);
   const [pointHints, setPointHints] = useState<PointHint[] | null>(null);
   const [aspectRatio, setAspectRatio] = useState<string>("1:1");
+  const [showDimensions, setShowDimensions] = useState(false);
 
   const orderedKeys = useMemo(() => KEYS.slice(0, borderCount), [borderCount]);
 
@@ -138,6 +142,8 @@ const Canvas: React.FC = () => {
     setLabels(null);
     setOpenings(null);
     setRoomCenters(null);
+    setFloorPlanRooms(null);
+    setShowDimensions(false);
     setFloorPlanError(null);
     setShowFloorPlanView(false);
     if (message) {
@@ -458,6 +464,7 @@ const Canvas: React.FC = () => {
       setLabels(roomsToLabels(result));
       setOpenings(roomsToOpenings(result));
       setRoomCenters(roomCentersFromResult(result));
+      setFloorPlanRooms(roomsFromResult(result));
       setFloorPlanStatus(result.message || "Floor plan generated successfully.");
     } catch (error) {
       const message = error instanceof Error ? error.message : "Failed to finalize floor plan.";
@@ -496,6 +503,8 @@ const Canvas: React.FC = () => {
     setLabels(null);
     setOpenings(null);
     setRoomCenters(null);
+    setFloorPlanRooms(null);
+    setShowDimensions(false);
 
     try {
       const submission = await submitFormatV2Job({
@@ -554,6 +563,21 @@ const Canvas: React.FC = () => {
               : "Step B: Floor Plan Preview"}
           </div>
           <div className="relative min-h-0 flex-1 overflow-hidden rounded border border-slate-200 bg-white p-1">
+            {canvasMode === "view" && segments && segments.length > 0 && (
+              <div className="pointer-events-none absolute left-1/2 top-3 z-10 -translate-x-1/2">
+                <button
+                  type="button"
+                  onClick={() => setShowDimensions((prev) => !prev)}
+                  className={`pointer-events-auto rounded-full border px-4 py-2 text-xs font-semibold shadow-sm transition-colors ${
+                    showDimensions
+                      ? "border-indigo-700 bg-indigo-700 text-white"
+                      : "border-slate-300 bg-white text-slate-700 hover:bg-slate-100"
+                  }`}
+                >
+                  {showDimensions ? "Hide Dimensions" : "View Dimensions"}
+                </button>
+              </div>
+            )}
             <WorkspaceCanvas
               mode={canvasMode}
               editState={{
@@ -580,6 +604,12 @@ const Canvas: React.FC = () => {
                 isLoading: isGeneratingFloorPlan,
                 status: floorPlanStatus,
                 pointHints: pointHints,
+              }}
+              viewEffects={{
+                roomDimensions: {
+                  enabled: showDimensions,
+                  rooms: floorPlanRooms,
+                },
               }}
             />
             <LoadingOverlay
