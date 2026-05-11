@@ -21,7 +21,7 @@ const Grid: React.FC<GridProps> = ({ startX, endX, startY, endY, gridSize, pxPer
 
   for (let x = startGridX; x <= endX; x += gridSize) {
     elems.push(
-      <Line key={`v${x}`} points={[x, startY, x, endY]} stroke="#e0e0e0" strokeWidth={1 / stageScale} />,
+      <Line key={`v${x}`} points={[x, startY, x, endY]} stroke="#f1f5f9" strokeWidth={1 / stageScale} />,
     );
     elems.push(
       <Text
@@ -30,13 +30,13 @@ const Grid: React.FC<GridProps> = ({ startX, endX, startY, endY, gridSize, pxPer
         y={startY + 2 / stageScale}
         text={formatLengthFromCm(pxToCm(x, pxPerCm), 1)}
         fontSize={10 / stageScale}
-        fill="#999"
+        fill="#cbd5e1"
       />,
     );
   }
   for (let y = startGridY; y <= endY; y += gridSize) {
     elems.push(
-      <Line key={`h${y}`} points={[startX, y, endX, y]} stroke="#e0e0e0" strokeWidth={1 / stageScale} />,
+      <Line key={`h${y}`} points={[startX, y, endX, y]} stroke="#f1f5f9" strokeWidth={1 / stageScale} />,
     );
     elems.push(
       <Text
@@ -45,7 +45,7 @@ const Grid: React.FC<GridProps> = ({ startX, endX, startY, endY, gridSize, pxPer
         y={y + 2 / stageScale}
         text={formatLengthFromCm(pxToCm(y, pxPerCm), 1)}
         fontSize={10 / stageScale}
-        fill="#999"
+        fill="#cbd5e1"
       />,
     );
   }

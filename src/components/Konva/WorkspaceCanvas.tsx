@@ -39,6 +39,7 @@ interface WorkspaceCanvasProps {
     segments: Coordinate[][] | null;
     labels: Label[] | null;
     openings: CanvasOpening[] | null;
+    rooms: ProcessedRoomData[] | null;
     isLoading: boolean;
     status: string | null;
     pointHints: PointHint[] | null;
@@ -104,8 +105,9 @@ const WorkspaceCanvas: React.FC<WorkspaceCanvasProps> = ({
       segments={viewState.segments}
       labels={viewState.labels ?? undefined}
       openings={viewState.openings ?? undefined}
+      rooms={viewState.rooms ?? undefined}
       pxPerCm={0.01}
-      wallThickness={6}
+      wallThickness={10}
       viewEffects={viewEffects}
     />
   );

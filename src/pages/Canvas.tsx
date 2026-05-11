@@ -601,6 +601,7 @@ const Canvas: React.FC = () => {
                 segments,
                 labels,
                 openings,
+                rooms: floorPlanRooms,
                 isLoading: isGeneratingFloorPlan,
                 status: floorPlanStatus,
                 pointHints: pointHints,

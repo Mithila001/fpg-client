@@ -31,43 +31,103 @@ const Openings: React.FC<OpeningsProps> = ({ openings, pxPerCm, offsetX, offsetY
         const nx = -dy / len;
         const ny = dx / len;
 
-        if (opening.kind === "window") {
-          const gap = 3 / stageScale;
-          return (
-            <React.Fragment key={`opening-${idx}`}>
-              <Line points={[x1, y1, x2, y2]} stroke="#0f766e" strokeWidth={3 / stageScale} lineCap="round" />
-              <Line
-                points={[x1 + nx * gap, y1 + ny * gap, x2 + nx * gap, y2 + ny * gap]}
-                stroke="#2dd4bf"
-                strokeWidth={5 / stageScale}
-                lineCap="round"
-              />
-              <Line
-                points={[x1 - nx * gap, y1 - ny * gap, x2 - nx * gap, y2 - ny * gap]}
-                stroke="#22d3ee"
-                strokeWidth={5 / stageScale}
-                lineCap="round"
-              />
-            </React.Fragment>
-          );
-        }
+        const gap = 2.5 / stageScale;
+        const isWindow = opening.kind === "window";
+        
+        // Professional Color Palette
+        const colors = isWindow ? {
+          frame: "#64748b",    // Slate 500
+          primary: "#bae6fd",  // Sky 200 (Glass blue)
+          detail: "#7dd3fc",   // Sky 300
+        } : {
+          frame: "#475569",    // Slate 600
+          primary: "#cbd5e1",  // Slate 300 (Door panel)
+          detail: "#94a3b8",   // Slate 400
+          floor: "#E3E3E3",    // Match the new floor color for cutouts
+        };
 
-        const gap = 3 / stageScale;
+        // End caps (frames)
+        const frameWidth = 4 / stageScale;
+        const wallThickness = 10 * pxPerCm; // 10cm wall in canvas units (no division by stageScale needed here)
+
         return (
           <React.Fragment key={`opening-${idx}`}>
-            <Line points={[x1, y1, x2, y2]} stroke="#9f1239" strokeWidth={3 / stageScale} lineCap="round" />
+            {/* DOOR CUTOUT: Clear the wall area visually */}
+            {!isWindow && (
+              <Line
+                points={[x1, y1, x2, y2]}
+                stroke={colors.floor}
+                strokeWidth={wallThickness}
+                lineCap="butt" // Clean square cutout
+              />
+            )}
+
+            {/* Center line (main opening body) */}
+            <Line 
+              points={[x1, y1, x2, y2]} 
+              stroke={colors.frame} 
+              strokeWidth={isWindow ? (1 / stageScale) : (1.5 / stageScale)} 
+              lineCap="round"
+            />
+            
+            {/* Window specific glass panes or Door specific panel */}
+            {isWindow ? (
+              <>
+                <Line
+                  points={[x1 + nx * gap, y1 + ny * gap, x2 + nx * gap, y2 + ny * gap]}
+                  stroke={colors.primary}
+                  strokeWidth={1.5 / stageScale}
+                  lineCap="round"
+                />
+                <Line
+                  points={[x1 - nx * gap, y1 - ny * gap, x2 - nx * gap, y2 - ny * gap]}
+                  stroke={colors.primary}
+                  strokeWidth={1.5 / stageScale}
+                  lineCap="round"
+                />
+              </>
+            ) : (
+              /* Door panel - single offset line */
+              <Line
+                points={[x1 + nx * (gap * 0.6), y1 + ny * (gap * 0.6), x2 + nx * (gap * 0.6), y2 + ny * (gap * 0.6)]}
+                stroke={colors.primary}
+                strokeWidth={3 / stageScale}
+                lineCap="round"
+              />
+            )}
+
+            {/* Frame end caps - perpendicular to the opening */}
             <Line
-              points={[x1 + nx * gap, y1 + ny * gap, x2 + nx * gap, y2 + ny * gap]}
-              stroke="#ef4444"
-              strokeWidth={5 / stageScale}
+              points={[
+                x1 + nx * gap * 1.5, y1 + ny * gap * 1.5,
+                x1 - nx * gap * 1.5, y1 - ny * gap * 1.5
+              ]}
+              stroke={colors.frame}
+              strokeWidth={frameWidth}
               lineCap="round"
             />
             <Line
-              points={[x1 - nx * gap, y1 - ny * gap, x2 - nx * gap, y2 - ny * gap]}
-              stroke="#fca5a5"
-              strokeWidth={5 / stageScale}
+              points={[
+                x2 + nx * gap * 1.5, y2 + ny * gap * 1.5,
+                x2 - nx * gap * 1.5, y2 - ny * gap * 1.5
+              ]}
+              stroke={colors.frame}
+              strokeWidth={frameWidth}
               lineCap="round"
             />
+
+            {/* Hinge indicator for Doors only (to distinguish from windows) */}
+            {!isWindow && (
+              <Line
+                points={[
+                  x1 - nx * gap * 2, y1 - ny * gap * 2,
+                  x1 - nx * gap * 2 + (dx * 0.1), y1 - ny * gap * 2 + (dy * 0.1)
+                ]}
+                stroke={colors.frame}
+                strokeWidth={1.5 / stageScale}
+                lineCap="round"
+              />
+            )}
           </React.Fragment>
         );
       })}

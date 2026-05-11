@@ -8,7 +8,7 @@ import React, {
 } from "react";
 import { Stage, Layer } from "react-konva";
 import Konva from "konva";
-import { Grid, Wall, Labels, Openings } from "./shapes";
+import { Grid, Wall, Labels, Openings, Rooms } from "./shapes";
 import type { Coordinate, Label } from "./shapes";
 import { cmToPx } from "../../utils/units";
 import type { CanvasOpening } from "../../types";
@@ -27,6 +27,7 @@ interface CoordinateCanvasProps {
   points?: Coordinate[];
   labels?: Label[];
   openings?: CanvasOpening[];
+  rooms?: ProcessedRoomData[]; // New prop for floor rendering
   pxPerCm?: number;
   wallThickness?: number;
   viewEffects?: CoordinateCanvasEffects;
@@ -44,7 +45,7 @@ const clamp = (value: number, min: number, max: number): number =>
   Math.min(max, Math.max(min, value));
 
 const CoordinateCanvas = forwardRef<CoordinateCanvasHandle, CoordinateCanvasProps>(
-  ({ segments, points, labels, openings, pxPerCm, wallThickness, viewEffects }, ref) => {
+  ({ segments, points, labels, openings, rooms, pxPerCm, wallThickness, viewEffects }, ref) => {
     const scale = pxPerCm ?? 1;
 
     let effectivePoints: Coordinate[] = [];
@@ -228,6 +229,14 @@ const CoordinateCanvas = forwardRef<CoordinateCanvasHandle, CoordinateCanvasProp
                 stageScale={stageScale}
               />
 
+              {rooms && rooms.length > 0 && (
+                <Rooms 
+                  rooms={rooms}
+                  pxPerCm={scale}
+                  stageScale={stageScale}
+                />
+              )}
+
               {segments && segments.length > 0 ? (
                 segments.map((seg, idx) => (
                   <Wall
@@ -236,14 +245,14 @@ const CoordinateCanvas = forwardRef<CoordinateCanvasHandle, CoordinateCanvasProp
                       x: cmToPx(p.x, scale),
                       y: -cmToPx(p.y, scale),
                     }))}
-                    thickness={cmToPx(wallThickness ?? 6, scale)}
+                    thickness={cmToPx(wallThickness ?? 10, scale)}
                     stageScale={stageScale}
                   />
                 ))
               ) : (
                 <Wall
                   points={scaledPoints}
-                  thickness={cmToPx(wallThickness ?? 6, scale)}
+                  thickness={cmToPx(wallThickness ?? 10, scale)}
                   stageScale={stageScale}
                 />
               )}
