@@ -28,7 +28,7 @@ export interface FormatV2JobSubmission {
   message: string;
 }
 
-export const FPG_TRIAL_COUNT = 500;
+export const FPG_TRIAL_COUNT = 1000;
 
 export const submitFormatV2Job = async (
   request: FormatV2Request,
@@ -46,17 +46,17 @@ export const fetchFormatV2JobState = async (
 ): Promise<JobStateResponse<FormatV2Result>> => {
   const state = await fetchJobState<any>(jobId);
 
-  if (state.result && typeof state.result === 'object' && 'result' in state.result) {
+  if (state.result && typeof state.result === "object" && "result" in state.result) {
     if (state.result.result && state.result.result.union_results) {
       state.result = state.result.result;
     }
   }
 
   if (!state.result && state.events && Array.isArray(state.events)) {
-    const successEvent = state.events.find((e: any) => e.event === 'success');
+    const successEvent = state.events.find((e: any) => e.event === "success");
     if (successEvent?.data?.result) {
       state.result = successEvent.data.result;
-      state.status = 'COMPLETED'; // Force status to COMPLETED if success event exists
+      state.status = "COMPLETED"; // Force status to COMPLETED if success event exists
     }
   }
 
@@ -79,11 +79,11 @@ const centroidFromVertices = (vertices: Array<any>): Coordinate | null => {
     let x, y;
     if (Array.isArray(v)) {
       [x, y] = v;
-    } else if (v && typeof v === 'object') {
+    } else if (v && typeof v === "object") {
       x = v.x;
       y = v.y;
     }
-    if (typeof x === 'number' && typeof y === 'number') {
+    if (typeof x === "number" && typeof y === "number") {
       minX = Math.min(minX, x);
       maxX = Math.max(maxX, x);
       minY = Math.min(minY, y);

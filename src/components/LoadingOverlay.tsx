@@ -22,7 +22,9 @@ const LoadingOverlay: React.FC<LoadingOverlayProps> = ({ isOpen, title, event, o
   if (!isOpen) return null;
 
   const rawEventLabel = event?.event ?? "Waiting...";
-  const eventLabel = formatEventName(rawEventLabel);
+  const mappedRawEventLabel =
+    rawEventLabel === "solver_gate_not_passed" ? "Running Trials" : rawEventLabel;
+  const eventLabel = formatEventName(mappedRawEventLabel);
 
   return (
     <div className="absolute inset-0 z-20 flex items-center justify-center bg-slate-950/20 p-4 backdrop-blur-[2px]">

@@ -46,6 +46,7 @@ export const jobEventTypes = [
   "current_best_updated",
   "success",
   "time_out",
+  "timed_out",
   "fpg_low_score",
   "message",
   "solver_gate_not_passed",

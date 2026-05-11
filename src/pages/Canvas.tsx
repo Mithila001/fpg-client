@@ -33,6 +33,7 @@ import ConfigureRoomsModal, {
 import { subscribeToJobEvents } from "../api/client";
 import { cancelJob } from "../api/jobs";
 import LoadingOverlay from "../components/LoadingOverlay";
+import type { FormatV2Result, JobStateResponse } from "../types";
 
 const KEYS: CornerKey[] = ["A", "B", "C", "D", "E", "F"];
 const MIN_BORDERS = 4;
@@ -172,20 +173,28 @@ const Canvas: React.FC = () => {
   };
 
   const buildTrialEventNames = (count: number): string[] => {
-    // Use provided count, but ensure a minimum range of 500 trials
+    // Use provided count, but ensure a minimum range of 1000 trials
     // to catch all server-generated trials even if optuna_trial_count is low
-    const maxTrials = Math.max(Math.floor(count) + 1, 500);
+    const maxTrials = Math.max(Math.floor(count) + 1, 1000);
     return Array.from({ length: maxTrials }, (_, index) => `trial_${index}`);
   };
 
-  const eventDisplay = (event: JobEventPayload): string => {
+  const eventDisplay = (event: JobEventPayload & { eventName?: string }): string => {
+    // Map certain raw event names to more user-friendly UI text
+    const evName = event.event ?? event.eventName;
+    if (evName === "solver_gate_not_passed") return "Running Trials";
     if (event.message) return event.message;
-    if (event.event) return event.event;
+    if (evName) return evName;
     return "Processing...";
   };
 
   const isTerminalEvent = (eventName?: string): boolean => {
-    return eventName === "success" || eventName === "time_out" || eventName === "fpg_low_score";
+    return (
+      eventName === "success" ||
+      eventName === "time_out" ||
+      eventName === "timed_out" ||
+      eventName === "fpg_low_score"
+    );
   };
 
   useEffect(() => {
@@ -406,14 +415,42 @@ const Canvas: React.FC = () => {
     setIsRoomsModalOpen(false);
   };
 
+  const isTimedOutFloorPlanResult = (state: JobStateResponse<FormatV2Result>): boolean => {
+    const status = String(state.status ?? "").toUpperCase();
+    const resultStatus = String(state.result?.status ?? "").toUpperCase();
+    const resultMessage = String(state.result?.message ?? "").toLowerCase();
+
+    return (
+      status === "TIMED_OUT" ||
+      resultStatus === "NO_FLOOR_PLAN" ||
+      resultMessage.includes("no floor plan found")
+    );
+  };
+
   const finalizeFloorPlanJob = async (jobId: string) => {
     try {
       const state = await fetchFormatV2JobState(jobId);
       const result = state.result;
 
+      if (isTimedOutFloorPlanResult(state)) {
+        const timeoutMessage = "Server timed out, try again.";
+        setFloorPlanError(timeoutMessage);
+        setFloorPlanStatus(timeoutMessage);
+        return;
+      }
+
       if (!result) {
         setFloorPlanError(`Job finished with status ${state.status}, but no result was returned.`);
         setFloorPlanStatus(`Job ended with status ${state.status}.`);
+        return;
+      }
+
+      if (
+        !result.union_results?.unified_floor_plan ||
+        !result.union_results?.floor_plan_with_openings
+      ) {
+        setFloorPlanError("Server timed out, try again.");
+        setFloorPlanStatus("Server timed out, try again.");
         return;
       }
 
