@@ -845,46 +845,46 @@ const InputPlanCanvas: React.FC<InputPlanCanvasProps> = ({
           )}
         </Stage>
         {!isBlurred && (
-          <div className="absolute bottom-3 left-3 flex gap-2">
+          <div className="absolute bottom-4 left-4 flex gap-2.5 z-10">
             <button
               type="button"
               onClick={addPointOnLastEdge}
               disabled={!editable || borderCount >= ALL_KEYS.length}
-              className="px-2 py-1 text-xs rounded bg-blue-600 text-white disabled:opacity-50 disabled:cursor-not-allowed"
+              className="px-3.5 py-2 text-xs font-semibold rounded-lg bg-indigo-600 text-white shadow-sm transition-all hover:bg-indigo-700 hover:shadow active:scale-[0.98] disabled:opacity-50 disabled:pointer-events-none"
             >
-              Add border line
+              + Add border
             </button>
             <button
               type="button"
               onClick={removeLastPoint}
               disabled={!editable || borderCount <= 4}
-              className="px-2 py-1 text-xs rounded bg-slate-600 text-white disabled:opacity-50 disabled:cursor-not-allowed"
+              className="px-3.5 py-2 text-xs font-semibold rounded-lg bg-slate-700 text-white shadow-sm transition-all hover:bg-slate-800 hover:shadow active:scale-[0.98] disabled:opacity-50 disabled:pointer-events-none"
             >
-              Remove border line
+              - Remove border
             </button>
-            <div className="px-2 py-1 text-[10px] uppercase tracking-wider font-bold rounded bg-gray-100 text-gray-500 border border-gray-200 self-center">
+            <div className="px-3 py-2 text-[10px] uppercase tracking-widest font-bold rounded-lg bg-white/90 backdrop-blur text-slate-500 border border-slate-200/80 shadow-sm self-center flex items-center">
               Grid Snap: 0.1m
             </div>
           </div>
         )}
-      <div className="absolute top-3 right-3 flex flex-col gap-2">
+      <div className="absolute top-4 right-4 flex flex-col gap-2 z-10">
         <button
           onClick={handleZoomIn}
-          className="w-8 h-8 flex items-center justify-center rounded bg-gray-100 border border-gray-300 text-gray-700 hover:bg-gray-200"
+          className="w-9 h-9 flex items-center justify-center rounded-lg bg-white/90 backdrop-blur border border-slate-200/80 text-slate-700 hover:bg-slate-50 hover:text-indigo-600 shadow-sm transition-all active:scale-95"
           title="Zoom In"
         >
-          +
+          <svg className="w-5 h-5" fill="none" viewBox="0 0 24 24" stroke="currentColor"><path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M12 6v6m0 0v6m0-6h6m-6 0H6" /></svg>
         </button>
         <button
           onClick={handleZoomOut}
-          className="w-8 h-8 flex items-center justify-center rounded bg-gray-100 border border-gray-300 text-gray-700 hover:bg-gray-200"
+          className="w-9 h-9 flex items-center justify-center rounded-lg bg-white/90 backdrop-blur border border-slate-200/80 text-slate-700 hover:bg-slate-50 hover:text-indigo-600 shadow-sm transition-all active:scale-95"
           title="Zoom Out"
         >
-          -
+          <svg className="w-5 h-5" fill="none" viewBox="0 0 24 24" stroke="currentColor"><path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M20 12H4" /></svg>
         </button>
         <button
           onClick={handleResetZoom}
-          className="px-2 h-8 flex items-center justify-center rounded bg-gray-100 border border-gray-300 text-[11px] text-gray-700 hover:bg-gray-200"
+          className="w-9 h-9 flex items-center justify-center rounded-lg bg-white/90 backdrop-blur border border-slate-200/80 text-[11px] font-bold text-slate-700 hover:bg-slate-50 hover:text-indigo-600 shadow-sm transition-all active:scale-95 uppercase tracking-wider"
           title="Fit View"
         >
           Fit
@@ -892,7 +892,7 @@ const InputPlanCanvas: React.FC<InputPlanCanvasProps> = ({
         {Math.abs(stageScale - 1) > 1e-6 && (
           <button
             onClick={handleResetZoom}
-            className="w-8 h-8 flex items-center justify-center rounded bg-gray-100 border border-gray-300 text-xs text-gray-700 hover:bg-gray-200"
+            className="w-9 h-9 flex items-center justify-center rounded-lg bg-white/90 backdrop-blur border border-slate-200/80 text-[11px] font-bold text-slate-700 hover:bg-slate-50 hover:text-indigo-600 shadow-sm transition-all active:scale-95 uppercase tracking-wider"
             title="Reset View"
           >
             1:1

@@ -14,6 +14,7 @@ export interface RoadPlacement {
   width: number;
   length: number;
   gap: number;
+  roadType?: string;
 }
 
 export interface RoadPolygonResult {

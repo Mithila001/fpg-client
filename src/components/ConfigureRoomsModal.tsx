@@ -163,7 +163,7 @@ const ConfigureRoomsModal: React.FC<ConfigureRoomsModalProps> = ({
     setFloorWidthInput((initialRequirements.floorWidthCm / 100).toString());
     setFloorHeightInput((initialRequirements.floorHeightCm / 100).toString());
     setSubmitStatus(null);
-  }, [isOpen, initialRequirements]);
+  }, [isOpen, initialRequirements, maxUsableWidth, maxUsableHeight]);
 
   const hasValidLimits = maxUsableWidth !== null && maxUsableHeight !== null;
 
@@ -177,8 +177,9 @@ const ConfigureRoomsModal: React.FC<ConfigureRoomsModalProps> = ({
 
     const floorWidthCm = parseMetersInputToCm(floorWidthInput);
     const floorHeightCm = parseMetersInputToCm(floorHeightInput);
-    if (!floorWidthCm || !floorHeightCm || floorWidthCm <= 0 || floorHeightCm <= 0)
+    if (floorWidthCm === null || floorHeightCm === null || floorWidthCm <= 0 || floorHeightCm <= 0) {
       return "unknown";
+    }
 
     const buildableAreaCm2 = floorWidthCm * floorHeightCm;
 

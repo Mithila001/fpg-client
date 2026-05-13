@@ -71,6 +71,7 @@ const Canvas: React.FC = () => {
   const [targetAreaInput, setTargetAreaInput] = useState<string>("");
   const [scaleError, setScaleError] = useState<string | null>(null);
   const [roadMode, setRoadMode] = useState<"idle" | "placing">("idle");
+  const [selectedRoadType, setSelectedRoadType] = useState<string>("mainRoad");
   const [placedRoads, setPlacedRoads] = useState<RoadPlacement[]>([]);
   const [runAlgoStatus, setRunAlgoStatus] = useState<string | null>(null);
   const [isRunningAlgorithm, setIsRunningAlgorithm] = useState(false);
@@ -209,8 +210,8 @@ const Canvas: React.FC = () => {
       .then((data) => {
         if (!cancelled) setRoomSizeConstraints(data);
       })
-      .catch(() => {
-        // constraints unavailable — feasibility will show "unknown"
+      .catch((err) => {
+        console.error("fetchRoomSizeConstraints error:", err);
       });
     return () => {
       cancelled = true;
@@ -271,7 +272,7 @@ const Canvas: React.FC = () => {
   };
 
   const handleRoadPlace = (placement: RoadPlacement) => {
-    setPlacedRoads([placement]);
+    setPlacedRoads([{ ...placement, roadType: selectedRoadType }]);
     setRoadMode("idle");
     clearAlgorithmResultState();
     invalidateFloorPlanFromStepA();
@@ -363,7 +364,7 @@ const Canvas: React.FC = () => {
             { x: points[startKey].x, y: points[startKey].y },
             { x: points[endKey].x, y: points[endKey].y },
           ],
-          roadType: "mainRoad",
+          roadType: road.roadType || "mainRoad",
         };
       })
       .filter((item): item is UsableLandRoadConnectedSegment => item !== null);
@@ -554,24 +555,29 @@ const Canvas: React.FC = () => {
   const canvasMode = showFloorPlanView ? "view" : "edit";
 
   return (
-    <div className="flex h-full min-h-0 flex-1 flex-col">
+    <div className="flex h-full min-h-0 flex-1 flex-col bg-slate-50">
       <div className="flex min-h-0 flex-1 overflow-hidden">
-        <div className="flex w-[72%] min-w-0 flex-col gap-2 bg-slate-100 p-2">
-          <div className="text-sm text-slate-700">
-            {canvasMode === "edit"
-              ? "Step A: Land Boundary Workspace"
-              : "Step B: Floor Plan Preview"}
+        <div className="flex w-[72%] min-w-0 flex-col gap-3 p-4">
+          <div className="flex items-center justify-between">
+            <h1 className="text-lg font-bold text-slate-800">
+              {canvasMode === "edit"
+                ? "Step A: Land Boundary Workspace"
+                : "Step B: Floor Plan Preview"}
+            </h1>
+            <div className="text-sm font-medium text-slate-500 bg-white px-3 py-1 rounded-full shadow-sm border border-slate-200">
+              Interactive Map
+            </div>
           </div>
-          <div className="relative min-h-0 flex-1 overflow-hidden rounded border border-slate-200 bg-white p-1">
+          <div className="relative min-h-0 flex-1 overflow-hidden rounded-xl border border-slate-200/80 bg-white shadow-sm ring-1 ring-slate-900/5">
             {canvasMode === "view" && segments && segments.length > 0 && (
-              <div className="pointer-events-none absolute left-1/2 top-3 z-10 -translate-x-1/2">
+              <div className="pointer-events-none absolute left-1/2 top-4 z-10 -translate-x-1/2">
                 <button
                   type="button"
                   onClick={() => setShowDimensions((prev) => !prev)}
-                  className={`pointer-events-auto rounded-full border px-4 py-2 text-xs font-semibold shadow-sm transition-colors ${
+                  className={`pointer-events-auto flex items-center gap-2 rounded-full border px-5 py-2.5 text-sm font-semibold shadow-md transition-all hover:scale-105 active:scale-95 ${
                     showDimensions
-                      ? "border-indigo-700 bg-indigo-700 text-white"
-                      : "border-slate-300 bg-white text-slate-700 hover:bg-slate-100"
+                      ? "border-indigo-600 bg-indigo-600 text-white"
+                      : "border-slate-200 bg-white/90 text-slate-700 backdrop-blur hover:bg-slate-50 hover:text-indigo-600"
                   }`}
                 >
                   {showDimensions ? "Hide Dimensions" : "View Dimensions"}
@@ -622,21 +628,30 @@ const Canvas: React.FC = () => {
           </div>
         </div>
 
-        <div className="w-[28%] min-w-[320px] overflow-auto border-l border-slate-200 bg-white p-4">
-          <div className="flex flex-col gap-4">
-            <section className="rounded-md border border-slate-200 p-3">
-              <h2 className="mb-2 text-sm font-semibold text-slate-800">Step A: Land Setup</h2>
-              <div className="text-xs text-slate-600">Land border lines: {borderCount}</div>
-              <div className="mt-1 wrap-break-word text-xs text-slate-500">{shapeSummary}</div>
+        <div className="w-[28%] min-w-[340px] overflow-auto border-l border-slate-200 bg-white shadow-[-4px_0_24px_-12px_rgba(0,0,0,0.1)] z-10">
+          <div className="flex flex-col gap-6 p-6">
+            <section className="flex flex-col rounded-xl border border-slate-200/80 bg-slate-50/50 p-5 shadow-sm transition-all hover:shadow-md">
+              <div className="mb-4 flex items-center justify-between">
+                <h2 className="text-base font-bold text-slate-800 flex items-center gap-2">
+                  <span className="flex h-6 w-6 items-center justify-center rounded-full bg-indigo-100 text-xs text-indigo-700">1</span>
+                  Land Setup
+                </h2>
+                <div className="rounded-full bg-white px-2 py-1 text-[10px] font-semibold tracking-wider text-slate-500 shadow-sm border border-slate-200">
+                  {borderCount} BORDERS
+                </div>
+              </div>
+              <div className="wrap-break-word text-xs text-slate-500 bg-white p-3 rounded-lg border border-slate-100 shadow-inner">{shapeSummary}</div>
 
-              <div className="mt-4 flex flex-col gap-3">
-                <div className="text-xs text-slate-600 border-t pt-3">
-                  Current Area:{" "}
-                  <span className="font-semibold">{formatAreaFromCm2(currentArea, 2)}</span>
+              <div className="mt-5 flex flex-col gap-4">
+                <div className="flex items-center justify-between text-sm text-slate-700 border-t border-slate-200/60 pt-4">
+                  <span className="font-medium">Current Area</span>
+                  <span className="rounded bg-indigo-50 px-2 py-1 font-semibold text-indigo-700 border border-indigo-100">
+                    {formatAreaFromCm2(currentArea, 2)}
+                  </span>
                 </div>
 
-                <label className="flex flex-col gap-1 text-xs text-slate-700">
-                  Target Area (m2)
+                <label className="flex flex-col gap-1.5 text-sm font-medium text-slate-700 mt-1">
+                  Target Area (m²)
                   <input
                     type="number"
                     min="1"
@@ -644,73 +659,89 @@ const Canvas: React.FC = () => {
                     value={targetAreaInput}
                     onChange={(event) => setTargetAreaInput(event.target.value)}
                     disabled={isRunningAlgorithm || isGeneratingFloorPlan}
-                    className="rounded border border-slate-300 px-3 py-2 text-sm"
+                    className="w-full rounded-lg border border-slate-300 bg-white px-3.5 py-2.5 text-sm text-slate-900 shadow-sm transition-all focus:border-indigo-500 focus:outline-none focus:ring-2 focus:ring-indigo-500/20 disabled:bg-slate-50 disabled:text-slate-500"
                     placeholder="e.g. 50"
                   />
                 </label>
 
                 {scaleError && <div className="text-xs text-red-600">{scaleError}</div>}
 
-                <div className="flex gap-2">
-                  <button
-                    onClick={handleApplyArea}
-                    disabled={isRunningAlgorithm || isGeneratingFloorPlan}
-                    className="flex-1 rounded bg-blue-600 px-3 py-2 text-sm text-white hover:bg-blue-700"
-                  >
-                    Apply Area
-                  </button>
+                <div className="flex flex-col gap-2 pt-1">
+                  <div className="flex gap-2">
+                    <button
+                      onClick={handleApplyArea}
+                      disabled={isRunningAlgorithm || isGeneratingFloorPlan}
+                      className="flex-1 rounded-lg bg-indigo-600 px-4 py-2.5 text-sm font-semibold text-white shadow-sm transition-all hover:bg-indigo-700 hover:shadow focus:outline-none focus:ring-2 focus:ring-indigo-500/50 active:scale-[0.98] disabled:pointer-events-none disabled:opacity-50"
+                    >
+                      Apply Area
+                    </button>
 
-                  <button
-                    onClick={handleRoadButtonClick}
-                    disabled={isRunningAlgorithm || isGeneratingFloorPlan}
-                    className="flex-1 rounded bg-slate-700 px-3 py-2 text-sm text-white hover:bg-slate-800 disabled:cursor-not-allowed disabled:opacity-50"
-                  >
-                    {roadMode === "placing" ? "Cancel Road" : "Add Road"}
-                  </button>
+                    <button
+                      onClick={handleRoadButtonClick}
+                      disabled={isRunningAlgorithm || isGeneratingFloorPlan}
+                      className="flex-1 rounded-lg bg-slate-800 px-4 py-2.5 text-sm font-semibold text-white shadow-sm transition-all hover:bg-slate-900 hover:shadow focus:outline-none focus:ring-2 focus:ring-slate-500/50 active:scale-[0.98] disabled:pointer-events-none disabled:opacity-50"
+                    >
+                      {roadMode === "placing" ? "Cancel Road" : "Add Road"}
+                    </button>
+                  </div>
+
+                  {roadMode === "placing" && (
+                    <div className="rounded-lg bg-amber-50 p-3 text-xs text-amber-800 border border-amber-200">
+                      <div className="flex flex-col gap-2">
+                        <label className="flex flex-col gap-1 font-medium">
+                          Road Type
+                          <select
+                            value={selectedRoadType}
+                            onChange={(e) => setSelectedRoadType(e.target.value)}
+                            className="rounded border border-amber-300 bg-white px-2 py-1.5 text-slate-800 shadow-sm focus:border-indigo-500 focus:outline-none focus:ring-1 focus:ring-indigo-500"
+                          >
+                            <option value="mainRoad">Main Road</option>
+                            <option value="reguler_gravel_road">Regular Gravel Road</option>
+                            <option value="larg_gravel_road">Large Gravel Road</option>
+                          </select>
+                        </label>
+                        <span>Hover near a boundary segment, left click to place, right click to cancel.</span>
+                      </div>
+                    </div>
+                  )}
                 </div>
-
-                {roadMode === "placing" && (
-                  <div className="text-[11px] text-slate-600">
-                    Place Road mode active. Hover near a boundary segment, left click to place,
-                    right click to cancel.
-                  </div>
-                )}
-
-                {placedRoads.length > 0 && roadMode !== "placing" && (
-                  <div className="text-[11px] text-emerald-700">
-                    Road placed on border segment {placedRoads[0].segmentIndex + 1}.
-                  </div>
-                )}
 
                 {placedRoads.length > 0 && (
                   <button
                     onClick={handleRunAlgorithm}
                     disabled={isRunningAlgorithm || isGeneratingFloorPlan}
-                    className="w-full rounded bg-indigo-600 px-3 py-2 text-sm text-white hover:bg-indigo-700 disabled:cursor-not-allowed disabled:opacity-50"
+                    className="mt-2 w-full rounded-lg bg-gradient-to-r from-indigo-600 to-blue-600 px-4 py-3 text-sm font-bold text-white shadow-md transition-all hover:from-indigo-700 hover:to-blue-700 hover:shadow-lg focus:outline-none focus:ring-2 focus:ring-indigo-500/50 active:scale-[0.98] disabled:pointer-events-none disabled:opacity-50"
                   >
-                    {isRunningAlgorithm ? "Running..." : "Run Algorithm"}
+                    {isRunningAlgorithm ? "Running Analysis..." : "Run Algorithm"}
                   </button>
                 )}
 
                 {runAlgoStatus && (
-                  <div className="text-[11px] text-indigo-700">{runAlgoStatus}</div>
+                  <div className="rounded-lg bg-slate-100 p-3 text-xs font-medium text-slate-700 border border-slate-200 animate-pulse">
+                    {runAlgoStatus}
+                  </div>
                 )}
 
                 {buildableRectangleSize && (
-                  <div className="rounded border border-emerald-200 bg-emerald-50 p-2 text-xs text-emerald-800">
-                    Usable rectangle: {formatLengthFromCm(buildableRectangleSize.width, 2)} x{" "}
-                    {formatLengthFromCm(buildableRectangleSize.height, 2)}
+                  <div className="rounded-lg border border-emerald-200 bg-emerald-50/80 p-4 text-sm text-emerald-800 shadow-sm">
+                    <div className="font-semibold mb-1">Usable Rectangle Configured</div>
+                    <div className="text-emerald-700 text-xs">
+                      {formatLengthFromCm(buildableRectangleSize.width, 2)} × {formatLengthFromCm(buildableRectangleSize.height, 2)}
+                    </div>
                   </div>
                 )}
               </div>
             </section>
 
-            <section className="rounded-md border border-slate-200 p-3">
-              <h2 className="mb-2 text-sm font-semibold text-slate-800">
-                Step B: Rooms and Generation
-              </h2>
+            <section className="flex flex-col rounded-xl border border-slate-200/80 bg-slate-50/50 p-5 shadow-sm transition-all hover:shadow-md">
+              <div className="mb-5 flex items-center justify-between">
+                <h2 className="text-base font-bold text-slate-800 flex items-center gap-2">
+                  <span className="flex h-6 w-6 items-center justify-center rounded-full bg-emerald-100 text-xs text-emerald-700">2</span>
+                  Generation
+                </h2>
+              </div>
 
-              <label className="mb-3 flex flex-col gap-1 text-xs text-slate-700">
+              <label className="mb-4 flex flex-col gap-1.5 text-sm font-medium text-slate-700">
                 Target Aspect Ratio
                 <select
                   value={aspectRatio}
@@ -725,56 +756,58 @@ const Canvas: React.FC = () => {
                     }
                   }}
                   disabled={!buildableRectangleSize || isRunningAlgorithm || isGeneratingFloorPlan}
-                  className="rounded border border-slate-300 px-3 py-2 text-sm disabled:bg-slate-100 disabled:text-slate-400"
+                  className="w-full rounded-lg border border-slate-300 bg-white px-3.5 py-2.5 text-sm text-slate-900 shadow-sm transition-all focus:border-indigo-500 focus:outline-none focus:ring-2 focus:ring-indigo-500/20 disabled:bg-slate-50 disabled:text-slate-400"
                 >
-                  <option value="1:1">1:1</option>
-                  <option value="4:3">4:3</option>
-                  <option value="3:4">3:4</option>
-                  <option value="1:1.6">1:1.6</option>
-                  <option value="1.6:1">1.6:1</option>
+                  <option value="1:1">1:1 Square</option>
+                  <option value="4:3">4:3 Standard</option>
+                  <option value="3:4">3:4 Portrait</option>
+                  <option value="1:1.6">1:1.6 Golden (Tall)</option>
+                  <option value="1.6:1">1.6:1 Golden (Wide)</option>
                 </select>
               </label>
 
               <button
                 onClick={handleOpenConfigureRooms}
                 disabled={!buildableRectangleSize || isRunningAlgorithm || isGeneratingFloorPlan}
-                className="w-full rounded bg-cyan-600 px-3 py-2 text-sm text-white hover:bg-cyan-700 disabled:cursor-not-allowed disabled:opacity-50"
+                className="w-full rounded-lg bg-teal-600 px-4 py-2.5 text-sm font-semibold text-white shadow-sm transition-all hover:bg-teal-700 hover:shadow focus:outline-none focus:ring-2 focus:ring-teal-500/50 active:scale-[0.98] disabled:pointer-events-none disabled:opacity-50"
               >
                 Configure Rooms
               </button>
 
               {!buildableRectangleSize && (
-                <div className="mt-2 text-xs text-amber-700">
-                  Complete Step A and run algorithm before configuring rooms.
+                <div className="mt-3 rounded-lg bg-amber-50 p-3 text-xs text-amber-800 border border-amber-200">
+                  <span className="font-semibold">Action Required:</span> Complete Step 1 and run algorithm before configuring rooms.
                 </div>
               )}
 
-              <div className="mt-3 rounded border border-slate-200 bg-slate-50 p-2 text-xs text-slate-700">
-                <div className="font-medium text-slate-800">Saved Room Requirements</div>
-                <div>{submittedRequirements?.roomSummary ?? "Not submitted yet."}</div>
-                <div>
-                  Floor Size:{" "}
-                  {submittedRequirements
-                    ? `${submittedRequirements.floorWidthCm / 100} m x ${submittedRequirements.floorHeightCm / 100} m`
-                    : "Not set"}
+              <div className="mt-4 rounded-xl border border-slate-200/80 bg-white p-4 shadow-sm">
+                <div className="mb-2 text-xs font-bold uppercase tracking-wider text-slate-500">Requirements Status</div>
+                <div className="text-sm font-medium text-slate-800">
+                  {submittedRequirements?.roomSummary ?? <span className="text-slate-400 font-normal italic">Not configured yet</span>}
                 </div>
+                {submittedRequirements && (
+                  <div className="mt-2 inline-block rounded bg-slate-100 px-2 py-1 text-xs font-medium text-slate-600 border border-slate-200">
+                    Floor: {submittedRequirements.floorWidthCm / 100}m × {submittedRequirements.floorHeightCm / 100}m
+                  </div>
+                )}
               </div>
 
               <button
                 onClick={handleGenerateFloorPlan}
                 disabled={!submittedRequirements || isRunningAlgorithm || isGeneratingFloorPlan}
-                className="mt-3 w-full rounded bg-emerald-600 px-3 py-2 text-sm text-white hover:bg-emerald-700 disabled:cursor-not-allowed disabled:opacity-50"
+                className="mt-5 w-full rounded-xl bg-gradient-to-r from-emerald-500 to-teal-600 px-4 py-3.5 text-sm font-bold text-white shadow-md transition-all hover:from-emerald-600 hover:to-teal-700 hover:shadow-lg focus:outline-none focus:ring-2 focus:ring-emerald-500/50 active:scale-[0.98] disabled:pointer-events-none disabled:opacity-50 relative overflow-hidden group"
               >
-                {isGeneratingFloorPlan ? "Generating..." : "Generate Floor Plan"}
+                <div className="absolute inset-0 bg-white/20 translate-y-full group-hover:translate-y-0 transition-transform duration-300 ease-out" />
+                <span className="relative">{isGeneratingFloorPlan ? "Generating Plan..." : "Generate Floor Plan"}</span>
               </button>
 
               {showFloorPlanView && (
                 <button
                   onClick={() => setShowFloorPlanView(false)}
                   disabled={isGeneratingFloorPlan}
-                  className="mt-2 w-full rounded border border-slate-300 px-3 py-2 text-sm text-slate-700 hover:bg-slate-100"
+                  className="mt-3 w-full rounded-lg border border-slate-300 bg-white px-4 py-2.5 text-sm font-semibold text-slate-700 shadow-sm transition-all hover:bg-slate-50 hover:text-slate-900 active:scale-[0.98] disabled:pointer-events-none disabled:opacity-50"
                 >
-                  Back to Step A View
+                  Back to Land Setup
                 </button>
               )}
 

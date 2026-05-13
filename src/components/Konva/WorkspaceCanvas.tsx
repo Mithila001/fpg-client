@@ -94,7 +94,7 @@ const WorkspaceCanvas: React.FC<WorkspaceCanvasProps> = ({
 
   if (!viewState.segments || viewState.segments.length === 0) {
     return (
-      <div className="flex h-full items-center justify-center rounded border border-slate-200 bg-white text-sm text-slate-700">
+      <div className="flex h-full items-center justify-center rounded-xl border-2 border-dashed border-slate-200 bg-slate-50/50 p-6 text-center text-sm font-medium text-slate-500 shadow-inner">
         {viewState.status ?? "No generated floor plan to display."}
       </div>
     );

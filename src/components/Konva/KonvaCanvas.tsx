@@ -289,24 +289,24 @@ const CoordinateCanvas = forwardRef<CoordinateCanvasHandle, CoordinateCanvasProp
           </Stage>
         )}
 
-        <div className="absolute top-3 left-3 flex flex-col gap-2">
+        <div className="absolute top-4 left-4 flex flex-col gap-2 z-10">
           <button
             onClick={handleZoomIn}
-            className="w-8 h-8 flex items-center justify-center rounded bg-gray-100 border border-gray-300 text-gray-700 hover:bg-gray-200 shadow-sm"
+            className="w-9 h-9 flex items-center justify-center rounded-lg bg-white/90 backdrop-blur border border-slate-200/80 text-slate-700 hover:bg-slate-50 hover:text-indigo-600 shadow-sm transition-all active:scale-95"
             title="Zoom In"
           >
-            +
+            <svg className="w-5 h-5" fill="none" viewBox="0 0 24 24" stroke="currentColor"><path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M12 6v6m0 0v6m0-6h6m-6 0H6" /></svg>
           </button>
           <button
             onClick={handleZoomOut}
-            className="w-8 h-8 flex items-center justify-center rounded bg-gray-100 border border-gray-300 text-gray-700 hover:bg-gray-200 shadow-sm"
+            className="w-9 h-9 flex items-center justify-center rounded-lg bg-white/90 backdrop-blur border border-slate-200/80 text-slate-700 hover:bg-slate-50 hover:text-indigo-600 shadow-sm transition-all active:scale-95"
             title="Zoom Out"
           >
-            -
+            <svg className="w-5 h-5" fill="none" viewBox="0 0 24 24" stroke="currentColor"><path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M20 12H4" /></svg>
           </button>
           <button
             onClick={handleResetZoom}
-            className="px-2 h-8 flex items-center justify-center rounded bg-gray-100 border border-gray-300 text-[11px] font-medium text-gray-700 hover:bg-gray-200 shadow-sm"
+            className="w-9 h-9 flex items-center justify-center rounded-lg bg-white/90 backdrop-blur border border-slate-200/80 text-[11px] font-bold text-slate-700 hover:bg-slate-50 hover:text-indigo-600 shadow-sm transition-all active:scale-95 uppercase tracking-wider"
             title="Scale to Fit"
           >
             Fit

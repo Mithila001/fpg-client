@@ -16,7 +16,7 @@ export interface RoomSizeConstraint {
 
 export const fetchRoomSizeConstraints = async (): Promise<RoomSizeConstraint[]> => {
   const response = await client.get<RoomSizeConstraint[]>(
-    "/algorithms/room-size-constraints",
+    "/algorithms/room-size-constraints/",
   );
   return response.data;
 };
