@@ -627,10 +627,25 @@ const InputPlanCanvas: React.FC<InputPlanCanvasProps> = ({
             typeof buildableRectangleSides === "object" &&
             Object.keys(buildableRectangleSides).length > 0 && (
               <React.Fragment>
-                {(Object.entries(buildableRectangleSides) as [string, [RoomPoint, RoomPoint]][]).map(
+                {Object.entries(buildableRectangleSides).map(
                   ([sideName, points_pair]) => {
-                    if (!Array.isArray(points_pair) || points_pair.length < 2) return null;
-                    const { x: mx, y: my } = getMidpoint(points_pair[0], points_pair[1]);
+                    if (!points_pair) return null;
+                    // Safely extract points regardless of array vs object format
+                    const p1Raw = (points_pair as any)[0] ?? (points_pair as any).p1;
+                    const p2Raw = (points_pair as any)[1] ?? (points_pair as any).p2;
+                    
+                    const getPoint = (p: any) => {
+                      if (!p) return null;
+                      if (typeof p.x === "number" && typeof p.y === "number") return p as RoomPoint;
+                      if (Array.isArray(p) && p.length >= 2) return { x: p[0], y: p[1] } as RoomPoint;
+                      return null;
+                    };
+
+                    const p1 = getPoint(p1Raw);
+                    const p2 = getPoint(p2Raw);
+
+                    if (!p1 || !p2) return null;
+                    const { x: mx, y: my } = getMidpoint(p1, p2);
                     const label = sideName.toUpperCase();
                     
                     const fontSize = 13 / stageScale;

@@ -6,7 +6,7 @@ import React, {
   useImperativeHandle,
   useCallback,
 } from "react";
-import { Stage, Layer } from "react-konva";
+import { Stage, Layer, Rect } from "react-konva";
 import Konva from "konva";
 import { Grid, Wall, Labels, Openings, Rooms } from "./shapes";
 import type { Coordinate, Label } from "./shapes";
@@ -219,6 +219,15 @@ const CoordinateCanvas = forwardRef<CoordinateCanvasHandle, CoordinateCanvasProp
             onDragEnd={handleDragEnd}
           >
             <Layer>
+              {/* Background Rect for Export */}
+              <Rect
+                x={-stageX / stageScale}
+                y={-stageY / stageScale}
+                width={dimensions.width / stageScale}
+                height={dimensions.height / stageScale}
+                fill="#ffffff"
+              />
+
               <Grid
                 startX={viewStartX}
                 endX={viewEndX}
@@ -289,7 +298,7 @@ const CoordinateCanvas = forwardRef<CoordinateCanvasHandle, CoordinateCanvasProp
           </Stage>
         )}
 
-        <div className="absolute top-4 left-4 flex flex-col gap-2 z-10">
+        <div className="absolute top-4 right-4 flex flex-col gap-2 z-10">
           <button
             onClick={handleZoomIn}
             className="w-9 h-9 flex items-center justify-center rounded-lg bg-white/90 backdrop-blur border border-slate-200/80 text-slate-700 hover:bg-slate-50 hover:text-indigo-600 shadow-sm transition-all active:scale-95"
@@ -310,6 +319,24 @@ const CoordinateCanvas = forwardRef<CoordinateCanvasHandle, CoordinateCanvasProp
             title="Scale to Fit"
           >
             Fit
+          </button>
+          <div className="h-px bg-slate-200/80 w-6 mx-auto my-1" />
+          <button
+            onClick={() => {
+              const stage = stageRef.current;
+              if (!stage) return;
+              const uri = stage.toDataURL({ pixelRatio: 3 });
+              const link = document.createElement("a");
+              link.download = "floor_plan.png";
+              link.href = uri;
+              document.body.appendChild(link);
+              link.click();
+              document.body.removeChild(link);
+            }}
+            className="w-9 h-9 flex items-center justify-center rounded-lg bg-white/90 backdrop-blur border border-slate-200/80 text-slate-700 hover:bg-slate-50 hover:text-indigo-600 shadow-sm transition-all active:scale-95"
+            title="Export as High-Quality PNG"
+          >
+            <svg className="w-5 h-5" fill="none" viewBox="0 0 24 24" stroke="currentColor"><path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M4 16v1a3 3 0 003 3h10a3 3 0 003-3v-1m-4-8l-4-4m0 0L8 8m4-4v12" /></svg>
           </button>
         </div>
       </div>
