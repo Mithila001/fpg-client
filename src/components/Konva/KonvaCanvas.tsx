@@ -1,35 +1,53 @@
-import React, { useState, useEffect, useRef, forwardRef, useImperativeHandle } from "react";
-import { Stage, Layer, Circle, Text, Rect } from "react-konva";
+import React, {
+  useState,
+  useEffect,
+  useRef,
+  forwardRef,
+  useImperativeHandle,
+  useCallback,
+} from "react";
+import { Stage, Layer, Rect } from "react-konva";
 import Konva from "konva";
-import { Grid, Wall, Labels, Openings } from "./shapes";
+import { Grid, Wall, Labels, Openings, Rooms } from "./shapes";
 import type { Coordinate, Label } from "./shapes";
 import { cmToPx } from "../../utils/units";
 import type { CanvasOpening } from "../../types";
+import type { ProcessedRoomData } from "../../types";
+import RoomDimensionsOverlay from "./overlays/RoomDimensionsOverlay";
+
+interface CoordinateCanvasEffects {
+  roomDimensions?: {
+    enabled: boolean;
+    rooms: ProcessedRoomData[] | null;
+  };
+}
 
 interface CoordinateCanvasProps {
-  // optional collection of wall segments (each segment is a polyline)
   segments?: Coordinate[][];
-  // optional points array; retained for backwards compatibility
   points?: Coordinate[];
-  // array of textual labels to place on the stage
   labels?: Label[];
-  // openings to draw on top of walls
   openings?: CanvasOpening[];
-  // pixels-per-centimeter scale for converting internal cm coordinates to canvas px
+  rooms?: ProcessedRoomData[]; // New prop for floor rendering
   pxPerCm?: number;
-  // wall thickness in pixels
   wallThickness?: number;
+  viewEffects?: CoordinateCanvasEffects;
 }
 
 export interface CoordinateCanvasHandle {
   reset: () => void;
 }
 
+const MIN_VIEW_SCALE = 5;
+const MAX_VIEW_SCALE = 1000;
+const FIT_PADDING = 36;
+
+const clamp = (value: number, min: number, max: number): number =>
+  Math.min(max, Math.max(min, value));
+
 const CoordinateCanvas = forwardRef<CoordinateCanvasHandle, CoordinateCanvasProps>(
-  ({ segments, points, labels, openings, pxPerCm, wallThickness }, ref) => {
+  ({ segments, points, labels, openings, rooms, pxPerCm, wallThickness, viewEffects }, ref) => {
     const scale = pxPerCm ?? 1;
 
-    // determine which geometry to render (flatten segments for debugging)
     let effectivePoints: Coordinate[] = [];
     if (segments && segments.length > 0) {
       effectivePoints = segments.flat();
@@ -37,27 +55,16 @@ const CoordinateCanvas = forwardRef<CoordinateCanvasHandle, CoordinateCanvasProp
       effectivePoints = points;
     }
 
-    // compute offset so the minimum coordinate isn't at the very edge
-    const margin = 100;
-    let offsetX = 0;
-    let offsetY = 0;
-    if (effectivePoints.length > 0) {
-      const minX = Math.min(...effectivePoints.map((p) => p.x));
-      const minY = Math.min(...effectivePoints.map((p) => p.y));
-      offsetX = margin - cmToPx(minX, scale);
-      offsetY = margin - cmToPx(minY, scale);
-    }
-
     const scaledPoints = effectivePoints.map((p) => ({
-      x: cmToPx(p.x, scale) + offsetX,
-      y: cmToPx(p.y, scale) + offsetY,
+      x: cmToPx(p.x, scale),
+      y: -cmToPx(p.y, scale),
       label: p.label,
     }));
 
     const scaledLabels: Label[] | undefined = labels
       ? labels.map((l) => ({
-          x: cmToPx(l.x, scale) + offsetX,
-          y: cmToPx(l.y, scale) + offsetY,
+          x: cmToPx(l.x, scale),
+          y: -cmToPx(l.y, scale),
           text: l.text,
           fontSize: l.fontSize,
           color: l.color,
@@ -68,194 +75,273 @@ const CoordinateCanvas = forwardRef<CoordinateCanvasHandle, CoordinateCanvasProp
     const stageRef = useRef<Konva.Stage>(null);
     const [dimensions, setDimensions] = useState({ width: 0, height: 0 });
 
-    // pan & zoom state
     const [stageScale, setStageScale] = useState(1);
     const [stageX, setStageX] = useState(0);
     const [stageY, setStageY] = useState(0);
+    const [hasFit, setHasFit] = useState(false);
 
-  // grid configuration
-  const baseGridSize = cmToPx(10, scale);
+    // 1 meter grid size = 100 cm
+    const gridSize = cmToPx(100, scale);
 
-  // start with a simple scale-based grid size, but if we have geometry
-  // compute a "dynamic" grid spacing so the number of cells between the
-  // minimum and maximum coordinate stays roughly constant regardless of the
-  // raw coordinate values.  This keeps a small floor plan from being
-  // overwhelmed by a huge grid and a large plan from having only a handful of
-  // lines.
-  let gridSize = baseGridSize * scale; // fallback value
-  if (effectivePoints.length > 0) {
-    const maxX = Math.max(...effectivePoints.map((p) => p.x));
-    const maxY = Math.max(...effectivePoints.map((p) => p.y));
-    const minX = Math.min(...effectivePoints.map((p) => p.x));
-    const minY = Math.min(...effectivePoints.map((p) => p.y));
-
-    const rangeX = cmToPx(maxX - minX, scale);
-    const rangeY = cmToPx(maxY - minY, scale);
-    const maxRange = Math.max(rangeX, rangeY);
-
-    // how many grid cells do we want along the longest dimension?
-    const targetCells = 20;
-    const dynamicSize = maxRange / targetCells;
-
-    // clamp so that the grid never becomes absurdly tiny or huge
-    const minSize = baseGridSize * scale * 0.05;
-    const maxSize = baseGridSize * scale * 5;
-    gridSize = Math.min(maxSize, Math.max(minSize, dynamicSize));
-  }
-
-  // pan & zoom handlers
-  const handleWheel = (e: Konva.KonvaEventObject<WheelEvent>) => {
-    e.evt.preventDefault();
-    const stage = stageRef.current;
-    if (!stage) return;
-
-    const oldScale = stageScale;
-    const pointerPos = stage.getPointerPosition();
-    if (!pointerPos) return;
-
-    const zoomSpeed = 0.1;
-    const direction = e.evt.deltaY > 0 ? -1 : 1;
-    const newScale = Math.min(3, Math.max(0.5, oldScale + direction * zoomSpeed));
-
-    // zoom centered on cursor
-    const newX = pointerPos.x - (pointerPos.x - stageX) * (newScale / oldScale);
-    const newY = pointerPos.y - (pointerPos.y - stageY) * (newScale / oldScale);
-
-    setStageScale(newScale);
-    setStageX(newX);
-    setStageY(newY);
-  };
-
-  const handleDragEnd = (e: Konva.KonvaEventObject<DragEvent>) => {
-    setStageX(e.target.x());
-    setStageY(e.target.y());
-  };
-
-  // expose reset method via ref
-  useImperativeHandle(ref, () => ({
-    reset: () => {
-      setStageScale(1);
-      setStageX(0);
-      setStageY(0);
-    },
-  }));
-
-  // debug: log whenever dimensions state changes
-  useEffect(() => {
-    if (dimensions.width > 0 && dimensions.height > 0) {
-      console.log(
-        "Dimensions state updated:",
-        Math.round(dimensions.width),
-        "x",
-        Math.round(dimensions.height),
-        "scale:",
-        scale,
-      );
-    }
-  }, [dimensions, scale]);
-
-  // watch the container's size and update dimensions for Konva
-  useEffect(() => {
-    const observeTarget = containerRef.current;
-    if (!observeTarget) return;
-
-    const resizeObserver = new ResizeObserver((entries) => {
-      for (const entry of entries) {
-        const { width, height } = entry.contentRect;
-        setDimensions({ width, height });
-        console.log("CoordinateCanvas resized:", Math.round(width), "x", Math.round(height));
+    const fitToGeometry = useCallback(() => {
+      if (dimensions.width <= 0 || dimensions.height <= 0 || effectivePoints.length === 0) {
+        setStageScale(1);
+        setStageX(0);
+        setStageY(0);
+        return;
       }
-    });
 
-    resizeObserver.observe(observeTarget);
+      const minX = Math.min(...scaledPoints.map((p) => p.x));
+      const maxX = Math.max(...scaledPoints.map((p) => p.x));
+      const minY = Math.min(...scaledPoints.map((p) => p.y));
+      const maxY = Math.max(...scaledPoints.map((p) => p.y));
 
-    return () => resizeObserver.unobserve(observeTarget);
-  }, []);
+      const bboxWidth = Math.max(1, maxX - minX);
+      const bboxHeight = Math.max(1, maxY - minY);
+      const availableWidth = Math.max(1, dimensions.width - FIT_PADDING * 2);
+      const availableHeight = Math.max(1, dimensions.height - FIT_PADDING * 2);
 
-  return (
-    // minimal wrapper: this div is measured to provide dimensions
-    // use full size so parent resizing triggers ResizeObserver
-    <div ref={containerRef} style={{ width: "100%", height: "100%" }} className="bg-red-200">
-      {dimensions.width > 0 && (
-        <Stage
-          ref={stageRef}
-          width={Math.floor(dimensions.width)}
-          height={Math.floor(dimensions.height)}
-          draggable
-          scaleX={stageScale}
-          scaleY={stageScale}
-          x={stageX}
-          y={stageY}
-          onWheel={handleWheel}
-          onDragEnd={handleDragEnd}
-        >
-          <Layer>
-            {/* draw border around the entire canvas */}
-            <Rect
-              x={0}
-              y={0}
-              width={dimensions.width}
-              height={dimensions.height}
-              stroke="#000"
-              strokeWidth={1}
-            />
+      const nextScale = clamp(
+        Math.min(availableWidth / bboxWidth, availableHeight / bboxHeight),
+        MIN_VIEW_SCALE,
+        MAX_VIEW_SCALE,
+      );
 
-            {/* grid and labels */}
-            <Grid dimensions={dimensions} gridSize={gridSize} pxPerCm={scale} />
+      const nextX = (dimensions.width - bboxWidth * nextScale) / 2 - minX * nextScale;
+      const nextY = (dimensions.height - bboxHeight * nextScale) / 2 - minY * nextScale;
 
-            {/* walls rendered using the new Wall shape */}
-            {segments && segments.length > 0 ? (
-              segments.map((seg, idx) => (
-                <Wall
-                  key={`seg-${idx}`}
-                  points={seg.map((p) => ({
-                    x: cmToPx(p.x, scale) + offsetX,
-                    y: cmToPx(p.y, scale) + offsetY,
-                  }))}
-                  thickness={wallThickness ?? 6}
+      setStageScale(nextScale);
+      setStageX(nextX);
+      setStageY(nextY);
+    }, [scaledPoints, dimensions.width, dimensions.height]);
+
+    useEffect(() => {
+      if (dimensions.width > 0 && dimensions.height > 0 && effectivePoints.length > 0 && !hasFit) {
+        fitToGeometry();
+        setHasFit(true);
+      }
+    }, [dimensions.width, dimensions.height, effectivePoints, hasFit, fitToGeometry]);
+
+    const handleWheel = (e: Konva.KonvaEventObject<WheelEvent>) => {
+      e.evt.preventDefault();
+      const stage = stageRef.current;
+      if (!stage) return;
+
+      const oldScale = stageScale;
+      const pointerPos = stage.getPointerPosition();
+      if (!pointerPos) return;
+
+      const zoomSpeed = 0.1;
+      const direction = e.evt.deltaY > 0 ? -1 : 1;
+      const nextScale = clamp(
+        oldScale + direction * zoomSpeed * oldScale,
+        MIN_VIEW_SCALE,
+        MAX_VIEW_SCALE,
+      );
+
+      const newX = pointerPos.x - ((pointerPos.x - stageX) / oldScale) * nextScale;
+      const newY = pointerPos.y - ((pointerPos.y - stageY) / oldScale) * nextScale;
+
+      setStageScale(nextScale);
+      setStageX(newX);
+      setStageY(newY);
+    };
+
+    const handleDragEnd = (e: Konva.KonvaEventObject<DragEvent>) => {
+      setStageX(e.target.x());
+      setStageY(e.target.y());
+    };
+
+    const zoomFromViewportCenter = (delta: number) => {
+      const nextScale = clamp(stageScale + delta, MIN_VIEW_SCALE, MAX_VIEW_SCALE);
+      if (Math.abs(nextScale - stageScale) < 1e-6) return;
+
+      const center = {
+        x: dimensions.width / 2,
+        y: dimensions.height / 2,
+      };
+
+      const nextX = center.x - ((center.x - stageX) / stageScale) * nextScale;
+      const nextY = center.y - ((center.y - stageY) / stageScale) * nextScale;
+
+      setStageScale(nextScale);
+      setStageX(nextX);
+      setStageY(nextY);
+    };
+
+    const handleZoomIn = () => zoomFromViewportCenter(stageScale * 0.2);
+    const handleZoomOut = () => zoomFromViewportCenter(-stageScale * 0.2);
+    const handleResetZoom = () => fitToGeometry();
+
+    useImperativeHandle(ref, () => ({
+      reset: () => {
+        setHasFit(false);
+      },
+    }));
+
+    useEffect(() => {
+      const observeTarget = containerRef.current;
+      if (!observeTarget) return;
+
+      const resizeObserver = new ResizeObserver((entries) => {
+        for (const entry of entries) {
+          const { width, height } = entry.contentRect;
+          setDimensions({ width, height });
+        }
+      });
+
+      resizeObserver.observe(observeTarget);
+
+      return () => resizeObserver.unobserve(observeTarget);
+    }, []);
+
+    const viewStartX = -stageX / stageScale;
+    const viewEndX = (dimensions.width - stageX) / stageScale;
+    const viewStartY = -stageY / stageScale;
+    const viewEndY = (dimensions.height - stageY) / stageScale;
+
+    return (
+      <div
+        ref={containerRef}
+        className="relative h-full w-full rounded-lg border border-gray-200 bg-white overflow-hidden"
+      >
+        {dimensions.width > 0 && (
+          <Stage
+            ref={stageRef}
+            width={Math.floor(dimensions.width)}
+            height={Math.floor(dimensions.height)}
+            draggable
+            scaleX={stageScale}
+            scaleY={stageScale}
+            x={stageX}
+            y={stageY}
+            onWheel={handleWheel}
+            onDragEnd={handleDragEnd}
+          >
+            <Layer>
+              {/* Background Rect for Export */}
+              <Rect
+                x={-stageX / stageScale}
+                y={-stageY / stageScale}
+                width={dimensions.width / stageScale}
+                height={dimensions.height / stageScale}
+                fill="#ffffff"
+              />
+
+              <Grid
+                startX={viewStartX}
+                endX={viewEndX}
+                startY={viewStartY}
+                endY={viewEndY}
+                gridSize={gridSize}
+                pxPerCm={scale}
+                stageScale={stageScale}
+              />
+
+              {rooms && rooms.length > 0 && (
+                <Rooms 
+                  rooms={rooms}
+                  pxPerCm={scale}
+                  stageScale={stageScale}
                 />
-              ))
-            ) : (
-              <Wall points={scaledPoints} thickness={wallThickness ?? 6} />
-            )}
+              )}
 
-            {/* custom text labels */}
-            {scaledLabels && <Labels labels={scaledLabels} />}
-
-            {/* openings rendered as architectural symbols */}
-            {openings && openings.length > 0 && (
-              <Openings openings={openings} pxPerCm={scale} offsetX={offsetX} offsetY={offsetY} />
-            )}
-
-            {/* point markers / labels (keep for debugging) */}
-            {scaledPoints.map((point, index) => (
-              <React.Fragment key={index}>
-                <Circle
-                  x={point.x}
-                  y={point.y}
-                  radius={5}
-                  fill="white"
-                  stroke="#4f46e5"
-                  strokeWidth={2}
-                />
-                {point.label && (
-                  <Text
-                    x={point.x + 8}
-                    y={point.y - 12}
-                    text={point.label}
-                    fontSize={11}
-                    fontStyle="bold"
-                    fill="#475569"
+              {segments && segments.length > 0 ? (
+                segments.map((seg, idx) => (
+                  <Wall
+                    key={`seg-${idx}`}
+                    points={seg.map((p) => ({
+                      x: cmToPx(p.x, scale),
+                      y: -cmToPx(p.y, scale),
+                    }))}
+                    thickness={cmToPx(wallThickness ?? 10, scale)}
+                    stageScale={stageScale}
                   />
-                )}
-              </React.Fragment>
-            ))}
-          </Layer>
-        </Stage>
-      )}
-    </div>
-  );
-}
+                ))
+              ) : (
+                <Wall
+                  points={scaledPoints}
+                  thickness={cmToPx(wallThickness ?? 10, scale)}
+                  stageScale={stageScale}
+                />
+              )}
+
+              {scaledLabels && <Labels labels={scaledLabels} stageScale={stageScale} />}
+
+              {openings && openings.length > 0 && (
+                <Openings
+                  openings={openings.map((o) => ({
+                    ...o,
+                    y1: -o.y1,
+                    y2: -o.y2,
+                  }))}
+                  pxPerCm={scale}
+                  offsetX={0}
+                  offsetY={0}
+                  stageScale={stageScale}
+                />
+              )}
+            </Layer>
+
+            {viewEffects?.roomDimensions?.enabled &&
+              viewEffects.roomDimensions.rooms &&
+              viewEffects.roomDimensions.rooms.length > 0 && (
+                <Layer>
+                  <RoomDimensionsOverlay
+                    rooms={viewEffects.roomDimensions.rooms}
+                    pxPerCm={scale}
+                    stageScale={stageScale}
+                    precision={1}
+                  />
+                </Layer>
+              )}
+          </Stage>
+        )}
+
+        <div className="absolute top-4 right-4 flex flex-col gap-2 z-10">
+          <button
+            onClick={handleZoomIn}
+            className="w-9 h-9 flex items-center justify-center rounded-lg bg-white/90 backdrop-blur border border-slate-200/80 text-slate-700 hover:bg-slate-50 hover:text-indigo-600 shadow-sm transition-all active:scale-95"
+            title="Zoom In"
+          >
+            <svg className="w-5 h-5" fill="none" viewBox="0 0 24 24" stroke="currentColor"><path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M12 6v6m0 0v6m0-6h6m-6 0H6" /></svg>
+          </button>
+          <button
+            onClick={handleZoomOut}
+            className="w-9 h-9 flex items-center justify-center rounded-lg bg-white/90 backdrop-blur border border-slate-200/80 text-slate-700 hover:bg-slate-50 hover:text-indigo-600 shadow-sm transition-all active:scale-95"
+            title="Zoom Out"
+          >
+            <svg className="w-5 h-5" fill="none" viewBox="0 0 24 24" stroke="currentColor"><path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M20 12H4" /></svg>
+          </button>
+          <button
+            onClick={handleResetZoom}
+            className="w-9 h-9 flex items-center justify-center rounded-lg bg-white/90 backdrop-blur border border-slate-200/80 text-[11px] font-bold text-slate-700 hover:bg-slate-50 hover:text-indigo-600 shadow-sm transition-all active:scale-95 uppercase tracking-wider"
+            title="Scale to Fit"
+          >
+            Fit
+          </button>
+          <div className="h-px bg-slate-200/80 w-6 mx-auto my-1" />
+          <button
+            onClick={() => {
+              const stage = stageRef.current;
+              if (!stage) return;
+              const uri = stage.toDataURL({ pixelRatio: 3 });
+              const link = document.createElement("a");
+              link.download = "floor_plan.png";
+              link.href = uri;
+              document.body.appendChild(link);
+              link.click();
+              document.body.removeChild(link);
+            }}
+            className="w-9 h-9 flex items-center justify-center rounded-lg bg-white/90 backdrop-blur border border-slate-200/80 text-slate-700 hover:bg-slate-50 hover:text-indigo-600 shadow-sm transition-all active:scale-95"
+            title="Export as High-Quality PNG"
+          >
+            <svg className="w-5 h-5" fill="none" viewBox="0 0 24 24" stroke="currentColor"><path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M4 16v1a3 3 0 003 3h10a3 3 0 003-3v-1m-4-8l-4-4m0 0L8 8m4-4v12" /></svg>
+          </button>
+        </div>
+      </div>
+    );
+  },
 );
 
 export default CoordinateCanvas;

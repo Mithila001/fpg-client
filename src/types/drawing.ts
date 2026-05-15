@@ -9,7 +9,7 @@ export interface CanvasOpening {
   openingType: string;
   side: string;
   roomName: string;
-  roomType: string;
+  roomType?: string | null;
   connectedRoomName: string | null;
-  connectedRoomType: string | null;
+  connectedRoomType?: string | null;
 }

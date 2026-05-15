@@ -1,5 +1,6 @@
-import axios from "axios";
 import client from "./client";
+import type { JobStateResponse } from "../types";
+import { fetchJobState } from "./jobs";
 
 export interface UsableLandPoint {
   x: number;
@@ -8,16 +9,22 @@ export interface UsableLandPoint {
 
 export interface UsableLandRoadConnectedSegment {
   segment: [UsableLandPoint, UsableLandPoint];
-  roadType: "mainRoad";
+  roadType: string;
 }
 
-export interface UsableLandPayload {
+export interface BuildableSpaceRequest {
   area: number;
   segmentsCoordinates: UsableLandPoint[];
-  roadConnected: UsableLandRoadConnectedSegment[];
-  min_width: number;
-  min_height: number;
-  should_plot: boolean;
+  roadConnected?: UsableLandRoadConnectedSegment[];
+  min_width?: number;
+  min_height?: number;
+}
+
+export interface BuildableRectangleSides {
+  front: [UsableLandPoint, UsableLandPoint];
+  back: [UsableLandPoint, UsableLandPoint];
+  left: [UsableLandPoint, UsableLandPoint];
+  right: [UsableLandPoint, UsableLandPoint];
 }
 
 export interface BuildableRectangle {
@@ -25,6 +32,7 @@ export interface BuildableRectangle {
   width: number;
   height: number;
   area: number;
+  sides?: BuildableRectangleSides;
 }
 
 export interface SegmentCategory {
@@ -42,7 +50,7 @@ export interface UsableLandResponseMetadata {
   segmentFinalOffsets: SegmentFinalOffset[];
 }
 
-export interface UsableLandResponse {
+export interface BuildableSpaceResult {
   status: string;
   message: string;
   buildable_rectangle?: BuildableRectangle;
@@ -50,23 +58,24 @@ export interface UsableLandResponse {
   metadata?: UsableLandResponseMetadata;
 }
 
-const getApiErrorMessage = (error: unknown): string => {
-  if (axios.isAxiosError<{ message?: string }>(error)) {
-    return error.response?.data?.message ?? error.message;
-  }
+export interface BuildableSpaceJobSubmission {
+  job_id: string;
+  status: string;
+  message: string;
+}
 
-  if (error instanceof Error) {
-    return error.message;
-  }
-
-  return "Failed to compute buildable space.";
+export const submitBuildableSpaceJob = async (
+  payload: BuildableSpaceRequest,
+): Promise<BuildableSpaceJobSubmission> => {
+  const response = await client.post<BuildableSpaceJobSubmission>(
+    "/algorithms/buildable-space",
+    payload,
+  );
+  return response.data;
 };
 
-export async function getUsableLand(payload: UsableLandPayload): Promise<UsableLandResponse> {
-  try {
-    const response = await client.post<UsableLandResponse>("/algorithms/buildable-space", payload);
-    return response.data;
-  } catch (error) {
-    throw new Error(getApiErrorMessage(error));
-  }
-}
+export const fetchBuildableSpaceJobState = async (
+  jobId: string,
+): Promise<JobStateResponse<BuildableSpaceResult>> => {
+  return fetchJobState<BuildableSpaceResult>(jobId);
+};

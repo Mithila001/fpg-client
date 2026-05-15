@@ -5,8 +5,18 @@ import type { RoadPlacement } from "./utils/geometry";
 import type { UsableLandPoint } from "../../api/getUsableLand";
 import type { Coordinate, Label } from "./shapes/types";
 import type { CanvasOpening } from "../../types";
+import type { PointHint } from "./InputPlanCanvas";
+import type { ProcessedRoomData } from "../../types";
+import type { BuildableRectangleSides } from "../../api/getUsableLand";
 
-interface CavesCanvasProps {
+interface WorkspaceViewEffects {
+  roomDimensions?: {
+    enabled: boolean;
+    rooms: ProcessedRoomData[] | null;
+  };
+}
+
+interface WorkspaceCanvasProps {
   mode: "edit" | "view";
   editState: {
     points: RoomPoints;
@@ -15,6 +25,7 @@ interface CavesCanvasProps {
     roadMode: "idle" | "placing";
     placedRoad: RoadPlacement | null;
     buildableRectangle: UsableLandPoint[] | null;
+    buildableRectangleSides: BuildableRectangleSides | null;
     shrunkBoundary: UsableLandPoint[] | null;
   };
   editActions: {
@@ -28,12 +39,21 @@ interface CavesCanvasProps {
     segments: Coordinate[][] | null;
     labels: Label[] | null;
     openings: CanvasOpening[] | null;
+    rooms: ProcessedRoomData[] | null;
     isLoading: boolean;
     status: string | null;
+    pointHints: PointHint[] | null;
   };
+  viewEffects?: WorkspaceViewEffects;
 }
 
-const CavesCanvas: React.FC<CavesCanvasProps> = ({ mode, editState, editActions, viewState }) => {
+const WorkspaceCanvas: React.FC<WorkspaceCanvasProps> = ({
+  mode,
+  editState,
+  editActions,
+  viewState,
+  viewEffects,
+}) => {
   if (mode === "edit") {
     return (
       <InputPlanCanvas
@@ -43,6 +63,7 @@ const CavesCanvas: React.FC<CavesCanvasProps> = ({ mode, editState, editActions,
         roadMode={editState.roadMode}
         placedRoad={editState.placedRoad}
         buildableRectangle={editState.buildableRectangle}
+        buildableRectangleSides={editState.buildableRectangleSides}
         shrunkBoundary={editState.shrunkBoundary}
         onAddBorderLine={editActions.onAddBorderLine}
         onRemoveBorderLine={editActions.onRemoveBorderLine}
@@ -55,15 +76,25 @@ const CavesCanvas: React.FC<CavesCanvasProps> = ({ mode, editState, editActions,
 
   if (viewState.isLoading) {
     return (
-      <div className="flex h-full items-center justify-center rounded border border-slate-200 bg-white text-sm text-slate-700">
-        Generating floor plan...
-      </div>
+      <InputPlanCanvas
+        points={editState.points}
+        borderCount={editState.borderCount}
+        editable={false}
+        roadMode="idle"
+        placedRoad={editState.placedRoad}
+        buildableRectangle={editState.buildableRectangle}
+        buildableRectangleSides={editState.buildableRectangleSides}
+        shrunkBoundary={editState.shrunkBoundary}
+        onPointsChange={() => {}}
+        isBlurred={true}
+        pointHints={viewState.pointHints}
+      />
     );
   }
 
   if (!viewState.segments || viewState.segments.length === 0) {
     return (
-      <div className="flex h-full items-center justify-center rounded border border-slate-200 bg-white text-sm text-slate-700">
+      <div className="flex h-full items-center justify-center rounded-xl border-2 border-dashed border-slate-200 bg-slate-50/50 p-6 text-center text-sm font-medium text-slate-500 shadow-inner">
         {viewState.status ?? "No generated floor plan to display."}
       </div>
     );
@@ -74,10 +105,12 @@ const CavesCanvas: React.FC<CavesCanvasProps> = ({ mode, editState, editActions,
       segments={viewState.segments}
       labels={viewState.labels ?? undefined}
       openings={viewState.openings ?? undefined}
-      pxPerCm={1}
-      wallThickness={6}
+      rooms={viewState.rooms ?? undefined}
+      pxPerCm={0.01}
+      wallThickness={10}
+      viewEffects={viewEffects}
     />
   );
 };
 
-export default CavesCanvas;
+export default WorkspaceCanvas;

@@ -108,7 +108,7 @@ Submits a job to calculate the buildable area of a plot.
     { "x": 0, "y": 0 },
     { "x": 10, "y": 0 }
   ],
-  "roadType": "Main Road"
+  "roadType": "mainRoad"
 }
 ```
 

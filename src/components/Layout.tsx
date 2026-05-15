@@ -1,24 +1,25 @@
 import React from "react";
 import { Link, NavLink, Outlet } from "react-router-dom";
 
-// no props needed yet; children are rendered via <Outlet />
 const Layout: React.FC = () => {
   return (
-    // min-h-screen ensures the page is at least the height of the viewport
-    <div className="flex flex-col min-h-screen bg-gray-50 dark:bg-gray-900">
-      {/* STICKY HEADER: Added 'sticky top-0' and 'z-50' to stay on top of other elements */}
-      <header className="sticky top-0 z-50 bg-white/80 dark:bg-gray-800/80 backdrop-blur-md shadow-sm border-b border-gray-200 dark:border-gray-700">
-        <nav className="container mx-auto px-4 py-3 flex items-center justify-between">
-          <div className="text-xl font-semibold text-gray-800 dark:text-gray-100">
-            <Link to="/">House Plan Generator</Link>
+    <div className="flex flex-col min-h-screen bg-slate-50 text-slate-900 selection:bg-indigo-100 selection:text-indigo-900">
+      <header className="sticky top-0 z-50 bg-white/70 backdrop-blur-xl shadow-sm border-b border-slate-200/60">
+        <nav className="mx-auto px-6 py-4 flex items-center justify-between max-w-7xl">
+          <div className="text-xl font-bold tracking-tight text-slate-900 flex items-center gap-2">
+            <Link to="/" className="flex items-center gap-2 hover:opacity-80 transition-opacity">
+              <img src="/logo.png" alt="Floor Plan Gen Logo" className="h-8 w-8 object-contain" />
+              <span>Floor Plan<span className="text-indigo-600">Gen</span></span>
+            </Link>
           </div>
-          <ul className="flex space-x-6 text-sm">
+          <ul className="flex items-center space-x-8 text-sm font-medium">
             <li>
               <NavLink
                 to="/"
                 className={({ isActive }) =>
-                  `text-gray-600 dark:text-gray-300 hover:text-gray-900 dark:hover:text-white transition-colors` +
-                  (isActive ? " font-bold text-blue-600 dark:text-blue-400" : "")
+                  `transition-all duration-200 hover:text-indigo-600 ${
+                    isActive ? "text-indigo-600 font-semibold" : "text-slate-600"
+                  }`
                 }
               >
                 Home
@@ -26,48 +27,30 @@ const Layout: React.FC = () => {
             </li>
             <li>
               <NavLink
-                to="/caves"
+                to="/canvas"
                 className={({ isActive }) =>
-                  `text-gray-600 dark:text-gray-300 hover:text-gray-900 dark:hover:text-white transition-colors` +
-                  (isActive ? " font-bold text-blue-600 dark:text-blue-400" : "")
+                  `transition-all duration-200 px-4 py-2 rounded-full ${
+                    isActive
+                      ? "bg-indigo-50 text-indigo-700 font-semibold ring-1 ring-indigo-200"
+                      : "text-slate-600 hover:text-indigo-600 hover:bg-slate-100"
+                  }`
                 }
               >
-                Caves
-              </NavLink>
-            </li>
-            <li>
-              <NavLink
-                to="/input-plan"
-                className={({ isActive }) =>
-                  `text-gray-600 dark:text-gray-300 hover:text-gray-900 dark:hover:text-white transition-colors` +
-                  (isActive ? " font-bold text-blue-600 dark:text-blue-400" : "")
-                }
-              >
-                Input Plan
-              </NavLink>
-            </li>
-            <li>
-              <NavLink
-                to="/configure-rooms"
-                className={({ isActive }) =>
-                  `text-gray-600 dark:text-gray-300 hover:text-gray-900 dark:hover:text-white transition-colors` +
-                  (isActive ? " font-bold text-blue-600 dark:text-blue-400" : "")
-                }
-              >
-                Configure Rooms
+                Workspace
               </NavLink>
             </li>
           </ul>
         </nav>
       </header>
 
-      {/* MAIN CONTENT: flex-grow + flex-col lets children fill available height */}
       <main className="grow flex flex-col min-h-0">
         <Outlet />
       </main>
 
-      <footer className="bg-white dark:bg-gray-800 border-t border-gray-200 dark:border-gray-700 text-center py-6 text-sm text-gray-500">
-        © {new Date().getFullYear()} House Plan Generator
+      <footer className="border-t border-slate-200 bg-white py-8 text-center text-sm text-slate-500">
+        <div className="max-w-7xl mx-auto px-6">
+          <p>© {new Date().getFullYear()} Floor Plan Generator. All rights reserved.</p>
+        </div>
       </footer>
     </div>
   );

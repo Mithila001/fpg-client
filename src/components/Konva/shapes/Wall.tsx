@@ -10,13 +10,15 @@ interface WallProps {
   // fill/stroke color of the wall
   color?: string;
   strokeColor?: string;
+  stageScale: number;
 }
 
 const Wall: React.FC<WallProps> = ({
   points,
-  thickness = 6,
-  color = "#d1d5db", // light gray fill
-  strokeColor = "#4b5563", // darker edge
+  thickness = 10,
+  color = "#374151", // Charcoal gray fill
+  strokeColor = "#111827", // Deep navy/black edge
+  stageScale,
 }) => {
   const elems: React.ReactNode[] = [];
 
@@ -41,24 +43,31 @@ const Wall: React.FC<WallProps> = ({
 
     const polygonPoints = [p1a.x, p1a.y, p2a.x, p2a.y, p2b.x, p2b.y, p1b.x, p1b.y];
 
+    // Solid wall fill with subtle shadow
     elems.push(
       <Line
         key={`wall-seg-${i}`}
         points={polygonPoints}
         closed
-        fill={color}
+        fill={color} 
         stroke={strokeColor}
-        strokeWidth={1}
+        strokeWidth={1.5 / stageScale}
+        lineJoin="round"
+        shadowColor="rgba(0,0,0,0.1)"
+        shadowBlur={2 / stageScale}
+        shadowOffset={{ x: 1 / stageScale, y: 1 / stageScale }}
+        shadowOpacity={0.5}
       />,
     );
 
-    // optional center line to give double-line look
+    // Subtle inner line for architectural detail
     elems.push(
       <Line
         key={`wall-line-${i}`}
         points={[p1.x, p1.y, p2.x, p2.y]}
-        stroke={strokeColor}
-        strokeWidth={1}
+        stroke="rgba(255,255,255,0.1)"
+        strokeWidth={0.5 / stageScale}
+        lineCap="round"
       />,
     );
   }

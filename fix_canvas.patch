@@ -1,0 +1,202 @@
+--- src/components/Konva/InputPlanCanvas.tsx
++++ src/components/Konva/InputPlanCanvas.tsx
+@@ -42,8 +42,8 @@
+ const ROAD_GAP = 6;
+ const ROAD_SNAP_THRESHOLD = 36;
+ const FIT_PADDING = 36;
+-const MIN_VIEW_SCALE = 0.2;
+-const MAX_VIEW_SCALE = 3;
++const MIN_VIEW_SCALE = 5;
++const MAX_VIEW_SCALE = 1000;
++const CM_TO_M = 0.01;
++const M_TO_CM = 100;
+ 
+ const distance = (a: RoomPoint, b: RoomPoint): number => {
+   const dx = b.x - a.x;
+@@ -176,7 +176,7 @@
+ 
+   const polygon = useMemo(
+-    () => orderedKeys.flatMap((key) => [points[key].x, points[key].y]),
++    () => orderedKeys.flatMap((key) => [points[key].x * CM_TO_M, points[key].y * CM_TO_M]),
+     [orderedKeys, points],
+   );
+ 
+@@ -192,15 +192,15 @@
+ 
+   const roadToLinePoints = (roadPolygon: RoomPoint[]): number[] =>
+-    roadPolygon.flatMap((point) => [point.x, point.y]);
++    roadPolygon.flatMap((point) => [point.x * CM_TO_M, point.y * CM_TO_M]);
+ 
+   const buildableRectanglePoints = useMemo(() => {
+     if (!buildableRectangle || buildableRectangle.length < 3) return null;
+-    return buildableRectangle.flatMap((point) => [point.x, point.y]);
++    return buildableRectangle.flatMap((point) => [point.x * CM_TO_M, point.y * CM_TO_M]);
+   }, [buildableRectangle]);
+ 
+   const shrunkBoundaryPoints = useMemo(() => {
+     if (!shrunkBoundary || shrunkBoundary.length < 3) return null;
+-    return shrunkBoundary.flatMap((point) => [point.x, point.y]);
++    return shrunkBoundary.flatMap((point) => [point.x * CM_TO_M, point.y * CM_TO_M]);
+   }, [shrunkBoundary]);
+ 
+   const allGeometryPoints = useMemo(() => {
+-    const base = orderedKeys.map((key) => points[key]);
++    const base = orderedKeys.map((key) => ({ x: points[key].x * CM_TO_M, y: points[key].y * CM_TO_M }));
+     if (buildableRectangle && buildableRectangle.length > 0) {
+-      base.push(...buildableRectangle);
++      base.push(...buildableRectangle.map(p => ({ x: p.x * CM_TO_M, y: p.y * CM_TO_M })));
+     }
+     if (shrunkBoundary && shrunkBoundary.length > 0) {
+-      base.push(...shrunkBoundary);
++      base.push(...shrunkBoundary.map(p => ({ x: p.x * CM_TO_M, y: p.y * CM_TO_M })));
+     }
+     return base;
+   }, [orderedKeys, points, buildableRectangle, shrunkBoundary]);
+@@ -262,8 +262,8 @@
+     if (!pointer) return null;
+ 
+     return {
+-      x: (pointer.x - stageX) / stageScale,
+-      y: (pointer.y - stageY) / stageScale,
++      x: ((pointer.x - stageX) / stageScale) * M_TO_CM,
++      y: ((pointer.y - stageY) / stageScale) * M_TO_CM,
+     };
+   };
+@@ -317,14 +317,15 @@
+ 
+   const handleDragMove = (key: CornerKey, e: Konva.KonvaEventObject<DragEvent>) => {
++    const mx = e.target.x();
++    const my = e.target.y();
+     const candidate = {
+-      x: clamp(e.target.x(), PADDING, dimensions.width - PADDING),
+-      y: clamp(e.target.y(), PADDING, dimensions.height - PADDING),
++      x: clamp(mx * M_TO_CM, 0, 1000000), // PADDING removed from CM bounds logic
++      y: clamp(my * M_TO_CM, 0, 1000000),
+     };
+ 
+     const next = { ...points, [key]: candidate };
+     if (isValidPolygon(next, orderedKeys)) {
+       onPointsChange(next);
+-      e.target.position(candidate);
++      e.target.position({ x: candidate.x * CM_TO_M, y: candidate.y * CM_TO_M });
+     } else {
+-      e.target.position(points[key]);
++      e.target.position({ x: points[key].x * CM_TO_M, y: points[key].y * CM_TO_M });
+     }
+   };
+@@ -420,17 +421,17 @@
+               closed
+               fill="#475569"
+               stroke="#1e293b"
+-              strokeWidth={2}
++              strokeWidth={2 / stageScale}
+             />
+           )}
+ 
+           {previewRoadPolygon && (
+             <Line
+               points={roadToLinePoints(previewRoadPolygon)}
+               closed
+               fill="#64748b88"
+               stroke="#334155"
+-              strokeWidth={2}
+-              dash={[8, 6]}
++              strokeWidth={2 / stageScale}
++              dash={[8 / stageScale, 6 / stageScale]}
+             />
+           )}
+ 
+-          <Line points={polygon} closed stroke="#0f172a" strokeWidth={6} fill="#dbeafe" />
++          <Line points={polygon} closed stroke="#0f172a" strokeWidth={6 / stageScale} fill="#dbeafe" />
+ 
+           {buildableRectanglePoints && (
+             <Line
+               points={buildableRectanglePoints}
+               closed
+               fill="#dc262633"
+               stroke="#dc2626"
+-              strokeWidth={3}
++              strokeWidth={3 / stageScale}
+             />
+           )}
+ 
+           {shrunkBoundaryPoints && (
+             <Line
+               points={shrunkBoundaryPoints}
+               closed
+               stroke="#7c2d12"
+-              strokeWidth={3}
++              strokeWidth={3 / stageScale}
+             />
+           )}
+ 
+           {orderedKeys.map((key) => {
+             const point = points[key];
++            const mx = point.x * CM_TO_M;
++            const my = point.y * CM_TO_M;
+             return (
+               <React.Fragment key={key}>
+                 <Circle
+-                  x={point.x}
+-                  y={point.y}
+-                  radius={8}
++                  x={mx}
++                  y={my}
++                  radius={8 / stageScale}
+                   fill={active === key ? "#f97316" : "#2563eb"}
+                   stroke="#ffffff"
+-                  strokeWidth={2}
++                  strokeWidth={2 / stageScale}
+                   draggable={editable}
+-                  dragBoundFunc={(pos) => {
+-                    return {
+-                      x: clamp(pos.x, PADDING, dimensions.width - PADDING),
+-                      y: clamp(pos.y, PADDING, dimensions.height - PADDING),
+-                    };
+-                  }}
+                   onDragStart={() => editable && setActive(key)}
+                   onDragMove={(e) => handleDragMove(key, e)}
+                   onDragEnd={(e) => {
+                     handleDragMove(key, e);
+                     setActive(null);
+                   }}
+                 />
+                 <Text
+-                  x={point.x + 10}
+-                  y={point.y - 20}
+-                  text={`${key} (${Math.round(point.x)}, ${Math.round(point.y)})`}
+-                  fontSize={12}
++                  x={mx + 10 / stageScale}
++                  y={my - 20 / stageScale}
++                  text={`${key} (${mx.toFixed(2)}m, ${my.toFixed(2)}m)`}
++                  fontSize={12 / stageScale}
+                   fill="#1f2937"
+                 />
+               </React.Fragment>
+             );
+           })}
+ 
+           <Text
+-            x={16}
+-            y={12}
++            x={(16 - stageX) / stageScale}
++            y={(12 - stageY) / stageScale}
+             text={orderedKeys
+               .map((key) => `${key}: ${formatLengthFromCm(wallLengths[key] ?? 0, 2)}`)
+               .join(" | ")}
+-            fontSize={13}
++            fontSize={13 / stageScale}
+             fill="#334155"
+           />
+           {!editable && (
+             <Text
+-              x={16}
+-              y={34}
++              x={(16 - stageX) / stageScale}
++              y={(34 - stageY) / stageScale}
+               text="Shape confirmed (view-only). Click Edit to modify borders."
+-              fontSize={12}
++              fontSize={12 / stageScale}
+               fill="#64748b"
+             />
+           )}
