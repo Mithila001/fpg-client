@@ -700,8 +700,7 @@ const Canvas: React.FC = () => {
                             className="rounded border border-amber-300 bg-white px-2 py-1.5 text-slate-800 shadow-sm focus:border-indigo-500 focus:outline-none focus:ring-1 focus:ring-indigo-500"
                           >
                             <option value="mainRoad">Main Road</option>
-                            <option value="reguler_gravel_road">Regular Gravel Road</option>
-                            <option value="larg_gravel_road">Large Gravel Road</option>
+                            <option value="privateRoad">Private Road </option>
                           </select>
                         </label>
                         <span>
