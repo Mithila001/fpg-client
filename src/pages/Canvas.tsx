@@ -399,7 +399,7 @@ const Canvas: React.FC = () => {
         },
       );
     } catch (error) {
-      const message = error instanceof Error ? error.message : "Unable to run algorithm.";
+      const message = error instanceof Error ? error.message : "Unable to Find Buildable Space.";
       setBuildableRectangleVertices(null);
       setShrunkBoundary(null);
       setBuildableRectangleSize(null);
@@ -633,14 +633,18 @@ const Canvas: React.FC = () => {
             <section className="flex flex-col rounded-xl border border-slate-200/80 bg-slate-50/50 p-5 shadow-sm transition-all hover:shadow-md">
               <div className="mb-4 flex items-center justify-between">
                 <h2 className="text-base font-bold text-slate-800 flex items-center gap-2">
-                  <span className="flex h-6 w-6 items-center justify-center rounded-full bg-indigo-100 text-xs text-indigo-700">1</span>
+                  <span className="flex h-6 w-6 items-center justify-center rounded-full bg-indigo-100 text-xs text-indigo-700">
+                    1
+                  </span>
                   Land Setup
                 </h2>
                 <div className="rounded-full bg-white px-2 py-1 text-[10px] font-semibold tracking-wider text-slate-500 shadow-sm border border-slate-200">
                   {borderCount} BORDERS
                 </div>
               </div>
-              <div className="wrap-break-word text-xs text-slate-500 bg-white p-3 rounded-lg border border-slate-100 shadow-inner">{shapeSummary}</div>
+              <div className="wrap-break-word text-xs text-slate-500 bg-white p-3 rounded-lg border border-slate-100 shadow-inner">
+                {shapeSummary}
+              </div>
 
               <div className="mt-5 flex flex-col gap-4">
                 <div className="flex items-center justify-between text-sm text-slate-700 border-t border-slate-200/60 pt-4">
@@ -700,7 +704,9 @@ const Canvas: React.FC = () => {
                             <option value="larg_gravel_road">Large Gravel Road</option>
                           </select>
                         </label>
-                        <span>Hover near a boundary segment, left click to place, right click to cancel.</span>
+                        <span>
+                          Hover near a boundary segment, left click to place, right click to cancel.
+                        </span>
                       </div>
                     </div>
                   )}
@@ -712,7 +718,7 @@ const Canvas: React.FC = () => {
                     disabled={isRunningAlgorithm || isGeneratingFloorPlan}
                     className="mt-2 w-full rounded-lg bg-gradient-to-r from-indigo-600 to-blue-600 px-4 py-3 text-sm font-bold text-white shadow-md transition-all hover:from-indigo-700 hover:to-blue-700 hover:shadow-lg focus:outline-none focus:ring-2 focus:ring-indigo-500/50 active:scale-[0.98] disabled:pointer-events-none disabled:opacity-50"
                   >
-                    {isRunningAlgorithm ? "Running Analysis..." : "Run Algorithm"}
+                    {isRunningAlgorithm ? "Running Analysis..." : "Find Buildable Space"}
                   </button>
                 )}
 
@@ -726,7 +732,8 @@ const Canvas: React.FC = () => {
                   <div className="rounded-lg border border-emerald-200 bg-emerald-50/80 p-4 text-sm text-emerald-800 shadow-sm">
                     <div className="font-semibold mb-1">Usable Rectangle Configured</div>
                     <div className="text-emerald-700 text-xs">
-                      {formatLengthFromCm(buildableRectangleSize.width, 2)} × {formatLengthFromCm(buildableRectangleSize.height, 2)}
+                      {formatLengthFromCm(buildableRectangleSize.width, 2)} ×{" "}
+                      {formatLengthFromCm(buildableRectangleSize.height, 2)}
                     </div>
                   </div>
                 )}
@@ -736,7 +743,9 @@ const Canvas: React.FC = () => {
             <section className="flex flex-col rounded-xl border border-slate-200/80 bg-slate-50/50 p-5 shadow-sm transition-all hover:shadow-md">
               <div className="mb-5 flex items-center justify-between">
                 <h2 className="text-base font-bold text-slate-800 flex items-center gap-2">
-                  <span className="flex h-6 w-6 items-center justify-center rounded-full bg-emerald-100 text-xs text-emerald-700">2</span>
+                  <span className="flex h-6 w-6 items-center justify-center rounded-full bg-emerald-100 text-xs text-emerald-700">
+                    2
+                  </span>
                   Generation
                 </h2>
               </div>
@@ -776,18 +785,24 @@ const Canvas: React.FC = () => {
 
               {!buildableRectangleSize && (
                 <div className="mt-3 rounded-lg bg-amber-50 p-3 text-xs text-amber-800 border border-amber-200">
-                  <span className="font-semibold">Action Required:</span> Complete Step 1 and run algorithm before configuring rooms.
+                  <span className="font-semibold">Action Required:</span> Complete Step 1 and run
+                  algorithm before configuring rooms.
                 </div>
               )}
 
               <div className="mt-4 rounded-xl border border-slate-200/80 bg-white p-4 shadow-sm">
-                <div className="mb-2 text-xs font-bold uppercase tracking-wider text-slate-500">Requirements Status</div>
+                <div className="mb-2 text-xs font-bold uppercase tracking-wider text-slate-500">
+                  Requirements Status
+                </div>
                 <div className="text-sm font-medium text-slate-800">
-                  {submittedRequirements?.roomSummary ?? <span className="text-slate-400 font-normal italic">Not configured yet</span>}
+                  {submittedRequirements?.roomSummary ?? (
+                    <span className="text-slate-400 font-normal italic">Not configured yet</span>
+                  )}
                 </div>
                 {submittedRequirements && (
                   <div className="mt-2 inline-block rounded bg-slate-100 px-2 py-1 text-xs font-medium text-slate-600 border border-slate-200">
-                    Floor: {submittedRequirements.floorWidthCm / 100}m × {submittedRequirements.floorHeightCm / 100}m
+                    Floor: {submittedRequirements.floorWidthCm / 100}m ×{" "}
+                    {submittedRequirements.floorHeightCm / 100}m
                   </div>
                 )}
               </div>
@@ -798,7 +813,9 @@ const Canvas: React.FC = () => {
                 className="mt-5 w-full rounded-xl bg-gradient-to-r from-emerald-500 to-teal-600 px-4 py-3.5 text-sm font-bold text-white shadow-md transition-all hover:from-emerald-600 hover:to-teal-700 hover:shadow-lg focus:outline-none focus:ring-2 focus:ring-emerald-500/50 active:scale-[0.98] disabled:pointer-events-none disabled:opacity-50 relative overflow-hidden group"
               >
                 <div className="absolute inset-0 bg-white/20 translate-y-full group-hover:translate-y-0 transition-transform duration-300 ease-out" />
-                <span className="relative">{isGeneratingFloorPlan ? "Generating Plan..." : "Generate Floor Plan"}</span>
+                <span className="relative">
+                  {isGeneratingFloorPlan ? "Generating Plan..." : "Generate Floor Plan"}
+                </span>
               </button>
 
               {showFloorPlanView && (

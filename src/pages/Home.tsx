@@ -12,6 +12,7 @@ const Home: React.FC = () => {
       </div>
 
       <div className="relative z-10 flex flex-col items-center justify-center grow px-6 py-20 text-center max-w-5xl mx-auto w-full">
+        <img src="/logo.png" alt="Logo" className="w-20 h-20 mb-6 drop-shadow-md" />
         <div className="inline-flex items-center gap-2 px-3 py-1 rounded-full bg-white/60 border border-indigo-100 shadow-sm backdrop-blur-md mb-8">
           <span className="flex h-2 w-2 rounded-full bg-indigo-500 animate-pulse"></span>
           <span className="text-sm font-medium text-indigo-900">Version 1.0</span>

@@ -15,9 +15,13 @@ const Labels: React.FC<LabelsProps> = ({ labels, stageScale }) => {
         const text = lbl.text;
         
         // Approximate dimensions for background
-        const padding = 4 / stageScale;
-        const width = (text.length * fontSize * 0.6) + padding * 2;
-        const height = fontSize + padding * 2;
+        const lines = text.split("\n");
+        const longestLine = lines.reduce((max, line) => Math.max(max, line.length), 0);
+        
+        const padding = 6 / stageScale;
+        const width = (longestLine * fontSize * 0.6) + padding * 2;
+        const lineHeight = fontSize * 1.2;
+        const height = (lines.length * lineHeight) + padding;
 
         return (
           <React.Fragment key={idx}>
@@ -31,15 +35,15 @@ const Labels: React.FC<LabelsProps> = ({ labels, stageScale }) => {
               cornerRadius={2 / stageScale}
             />
             <Text
-              x={lbl.x}
-              y={lbl.y}
+              x={lbl.x - width / 2}
+              y={lbl.y - height / 2}
               text={text}
+              width={width}
+              height={height}
               fontSize={fontSize}
               fontStyle="bold"
               fontFamily="Inter, system-ui, sans-serif"
               fill="#334155"
-              offsetX={width / 2 - padding}
-              offsetY={height / 2 - padding}
               align="center"
               verticalAlign="middle"
             />

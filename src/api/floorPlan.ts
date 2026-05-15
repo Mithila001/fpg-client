@@ -9,6 +9,7 @@ import type {
   Wall,
 } from "../types";
 import { fetchJobState } from "./jobs";
+import { formatRoomName } from "../utils/text";
 
 export interface FormatV2Request {
   floor_width: number;
@@ -137,7 +138,7 @@ export const roomCentersFromResult = (result: FormatV2Result): Coordinate[] => {
     centers.push({
       x: center.x,
       y: center.y,
-      label: room.name,
+      label: formatRoomName(room.name, room.type),
     });
   });
 
