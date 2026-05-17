@@ -373,8 +373,8 @@ const Canvas: React.FC = () => {
       area,
       segmentsCoordinates: buildClosedLoopCoordinates(points, orderedKeys),
       roadConnected,
-      min_width: 100,
-      min_height: 100,
+      min_width: 80,
+      min_height: 80,
     };
 
     try {
