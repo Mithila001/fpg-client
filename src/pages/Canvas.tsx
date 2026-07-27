@@ -769,8 +769,8 @@ const Canvas: React.FC = () => {
                   <option value="1:1">1:1 Square</option>
                   <option value="4:3">4:3 Standard</option>
                   <option value="3:4">3:4 Portrait</option>
-                  <option value="1:1.6">1:1.6 Golden (Tall)</option>
-                  <option value="1.6:1">1.6:1 Golden (Wide)</option>
+                  <option value="1:1.6">1:1.6 Golden (Wide)</option>
+                  <option value="1.6:1">1.6:1 Golden (Tall)</option>
                 </select>
               </label>
 
