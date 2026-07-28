@@ -1,15 +1,11 @@
 import axios from "axios";
+import { createApiUrl } from "./apiUrl";
 
-const apiBaseUrl = import.meta.env.VITE_API_BASE_URL?.trim();
-
-if (!apiBaseUrl) {
-  throw new Error("VITE_API_BASE_URL is required.");
-}
-
+/** Shared JSON client for synchronous API endpoints. */
 export const httpClient = axios.create({
-  baseURL: apiBaseUrl,
-  timeout: 30_000,
+  baseURL: createApiUrl(""),
   headers: {
+    Accept: "application/json",
     "Content-Type": "application/json",
   },
 });

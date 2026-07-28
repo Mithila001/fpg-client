@@ -1,5 +1,5 @@
 import axios from "axios";
-import { httpClient } from "../http/httpClient";
+import { httpClient } from "../http";
 import { BoundaryServiceError } from "./boundary.errors";
 import {
   assertBuildableSpaceRequest,
@@ -108,7 +108,7 @@ export const calculateBuildableSpace = async (
   assertBuildableSpaceRequest(request);
 
   try {
-    const response = await httpClient.post<unknown>("/buildable-space", request, {
+    const response = await httpClient.post<unknown>("buildable-space", request, {
       validateStatus: () => true,
     });
     const headerFlowId = readFlowIdHeader(response.headers);

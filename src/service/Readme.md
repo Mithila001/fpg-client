@@ -1,66 +1,84 @@
 # Service Layer
 
-This module is responsible **only for server communication**. It provides a clean and consistent boundary between the frontend and backend.
-
-## Responsibilities
-
-- Define API request, response, and error contracts.
-- Send HTTP requests to the server.
-- Validate outgoing requests and incoming responses.
-- Fail fast when data does not match the API contract.
-- Return strongly typed data to the application.
-
-## What Does Not Belong Here
-
-- Business logic
-- UI logic
-- React hooks or components
-- State management
-- Geometry or drawing calculations
-- Presentation formatting
+This folder contains server communication, runtime contract validation, and reusable transport helpers. It does not contain React state, drawing logic, or production page behavior.
 
 ## Structure
 
 ```text
 service/
-├── http/
-│   ├── httpClient.ts
-│   └── index.ts
-│
-├── validation/
-│   ├── validation.types.ts  # Shared validation contracts
-│   ├── validators.ts        # Reusable primitive validators
-│   └── index.ts
-│
-└── <feature>/
-    ├── <feature>.service.ts
-    ├── <feature>.api.types.ts
-    ├── <feature>.validators.ts
-    ├── <feature>.errors.ts
-    └── index.ts
+├── http/          # API URL builder and shared Axios client
+├── transport/     # Reusable fetch-response SSE parser
+├── validation/    # Reusable primitive runtime validators
+├── boundary/      # POST /buildable-space
+└── floor-plan/    # POST /generation/stream
 ```
 
-## Validation Design
+## Floor-plan stream
 
-The shared `validation` module validates generic JavaScript values such as objects, arrays, strings, numbers, enums, nullable values, keys, and array lengths.
-
-Each feature creates its own validator instance and supplies a feature-specific failure function. This keeps reusable validation logic independent from feature error classes and error messages.
-
-```ts
-const validators = createPrimitiveValidators(featureValidationFailure);
-```
-
-Feature validators remain responsible for API-specific rules such as allowed enum values, coordinate limits, required item counts, and relationships between fields.
-
-## Fail Fast Flow
+The floor-plan endpoint is SSE over POST:
 
 ```text
-Request
-  -> Validate request
-  -> HTTP call
-  -> Validate response
-  -> Invalid: throw typed service error
-  -> Valid: return typed data
+POST /generation/stream
+  -> validate request
+  -> fetch with Accept: text/event-stream
+  -> read response.body
+  -> buffer complete SSE frames
+  -> validate every envelope and event payload
+  -> retain floor_plan events by sequence
+  -> select completed.final_floor_plan_sequence
 ```
 
-Invalid or partially valid server data must never propagate into the application.
+Browser `EventSource` is not used because it only performs GET and cannot send the JSON request body.
+
+## Usage
+
+```ts
+import {
+  startFloorPlanGeneration,
+  type FloorPlanGenerationRequest,
+} from "./service/floor-plan";
+
+const request: FloorPlanGenerationRequest = {
+  floor_limits: { max_width: 120, max_length: 100 },
+  aspect_ratio: "4:3",
+  rooms: [
+    { id: "bedroom_1", room_type: "bedroom" },
+    { id: "bathroom_1", room_type: "bathroom" },
+    { id: "kitchen_1", room_type: "kitchen" },
+    { id: "veranda_1", room_type: "veranda" },
+  ],
+};
+
+const session = await startFloorPlanGeneration(request, {
+  onOpen: (jobId) => console.log("Opened", jobId),
+  onEvent: (event) => console.log(event.event, event.payload),
+  onClose: (reason) => console.log("Closed", reason),
+  onError: (error) => console.error(error),
+});
+
+const result = await session.completion;
+console.log("Final plan", result.selectedFloorPlan);
+
+// This only closes local delivery. It does not cancel server computation.
+session.stream.close();
+```
+
+## Environment
+
+Docker Compose commonly exposes the API on port `8001`:
+
+```env
+VITE_API_BASE_URL=http://127.0.0.1:8001
+```
+
+A directly launched Uvicorn server commonly uses port `8000`:
+
+```env
+VITE_API_BASE_URL=http://127.0.0.1:8000
+```
+
+The default stream path is `/generation/stream`. Override it only when the deployed server uses a different relative route:
+
+```env
+VITE_FLOOR_PLAN_STREAM_PATH=/generation/stream
+```
