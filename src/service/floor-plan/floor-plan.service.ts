@@ -1,24 +1,31 @@
+import type {
+  CompletedEvent,
+  FloorPlanEvent,
+  FloorPlanGenerationRequest,
+  FloorPlanGenerationResult,
+  GenerationErrorEvent,
+} from "../../types";
 import { createApiUrl } from "../http";
 import { consumeSseStream } from "../transport";
 import { FloorPlanServiceError } from "./floor-plan.errors";
+import {
+  fromGenerationApiEvent,
+  toFloorPlanGenerationApiRequest,
+} from "./floor-plan.mapper";
 import {
   assertFloorPlanGenerationRequest,
   extractGenerationHttpError,
   parseGenerationStreamEvent,
   readGenerationHttpErrorBody,
 } from "./floor-plan.validators";
+import type { GenerationRequest as ApiGenerationRequest } from "./floor-plan.api.types";
 import type {
-  CompletedEvent,
-  FloorPlanEvent,
   FloorPlanEventStream,
-  FloorPlanGenerationRequest,
-  FloorPlanGenerationResult,
   FloorPlanGenerationSession,
   FloorPlanStreamCloseReason,
   FloorPlanStreamHandlers,
   FloorPlanStreamOptions,
-  GenerationErrorEvent,
-} from "./floor-plan.api.types";
+} from "./floor-plan.service.types";
 
 const configuredStreamPath = import.meta.env.VITE_FLOOR_PLAN_STREAM_PATH?.trim();
 
@@ -91,7 +98,7 @@ const createGenerationError = (
   return new FloorPlanServiceError({
     kind: "generation_error",
     message: event.payload.message,
-    jobId: event.job_id,
+    jobId: event.jobId,
     code: event.payload.code,
     stage: event.payload.stage,
     eventName: event.event,
@@ -110,7 +117,10 @@ export const startFloorPlanGeneration = async (
   handlers: FloorPlanStreamHandlers,
   options: FloorPlanStreamOptions = {},
 ): Promise<FloorPlanGenerationSession> => {
-  assertFloorPlanGenerationRequest(request);
+  const apiRequest: ApiGenerationRequest =
+    toFloorPlanGenerationApiRequest(request);
+
+  assertFloorPlanGenerationRequest(apiRequest);
 
   const fetchImplementation = options.fetchImplementation ?? fetch;
   const controller = new AbortController();
@@ -170,7 +180,7 @@ export const startFloorPlanGeneration = async (
         },
         options.headers,
       ),
-      body: JSON.stringify(request),
+      body: JSON.stringify(apiRequest),
       signal: controller.signal,
     });
   } catch (error: unknown) {
@@ -263,15 +273,16 @@ export const startFloorPlanGeneration = async (
           });
         }
 
-        const event = parseGenerationStreamEvent(
+        const apiEvent = parseGenerationStreamEvent(
           frame.data,
           frame.event,
           frame.id,
           resolvedJobId,
         );
+        const event = fromGenerationApiEvent(apiEvent);
 
         if (resolvedJobId === null) {
-          resolvedJobId = event.job_id;
+          resolvedJobId = event.jobId;
         }
 
         // Gaps are allowed because progress/trial events can be coalesced or
@@ -280,7 +291,7 @@ export const startFloorPlanGeneration = async (
           throw new FloorPlanServiceError({
             kind: "sse_protocol",
             message: `SSE sequence ${event.sequence} did not increase after ${lastSequence}.`,
-            jobId: event.job_id,
+            jobId: event.jobId,
             eventName: event.event,
             rawData: frame.data,
           });
@@ -330,7 +341,8 @@ export const startFloorPlanGeneration = async (
         });
       }
 
-      const finalSequence = terminalCompletedEvent.payload.final_floor_plan_sequence;
+      const finalSequence =
+        terminalCompletedEvent.payload.finalFloorPlanSequence;
       const selectedFloorPlanEvent =
         finalSequence === null ? undefined : floorPlans.get(finalSequence);
 
@@ -339,7 +351,7 @@ export const startFloorPlanGeneration = async (
           kind: "stream_interrupted",
           message:
             "The completed event did not reference a floor-plan event received by this client.",
-          jobId: terminalCompletedEvent.job_id,
+          jobId: terminalCompletedEvent.jobId,
           eventName: terminalCompletedEvent.event,
           details: {
             finalFloorPlanSequence: finalSequence,
@@ -351,7 +363,7 @@ export const startFloorPlanGeneration = async (
       notifyClose("completed");
 
       return {
-        jobId: terminalCompletedEvent.job_id,
+        jobId: terminalCompletedEvent.jobId,
         completedEvent: terminalCompletedEvent,
         selectedFloorPlanEvent,
         selectedFloorPlan: selectedFloorPlanEvent.payload,

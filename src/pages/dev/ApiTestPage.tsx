@@ -1,21 +1,25 @@
 import { useEffect, useRef, useState } from "react";
-import type { ChangeEvent } from "react";
 import {
   BoundaryServiceError,
   calculateBuildableSpace,
-  type BuildableSpaceRequest,
 } from "../../service/boundary";
 import {
-  FLOOR_PLAN_STREAM_PATH,
   FloorPlanServiceError,
   startFloorPlanGeneration,
-  type FloorPlanGenerationRequest,
   type FloorPlanGenerationSession,
-  type GenerationSseEvent,
 } from "../../service/floor-plan";
+import type {
+  BuildableSpaceRequest,
+  BuildableSpaceResult,
+  CompletedEvent,
+  FloorPlanGenerationRequest,
+  FloorPlanPayload,
+  GenerationErrorEvent,
+  GenerationSseEvent,
+} from "../../types";
 
 const MOCK_BUILDABLE_SPACE_REQUEST: BuildableSpaceRequest = {
-  land_boundary: {
+  landBoundary: {
     points: [
       { x: 0, y: 0 },
       { x: 200, y: 0 },
@@ -25,41 +29,41 @@ const MOCK_BUILDABLE_SPACE_REQUEST: BuildableSpaceRequest = {
   },
   roads: [
     {
-      boundary_edge_index: 0,
+      boundaryEdgeIndex: 0,
       role: "main_entry",
-      road_type: "main_road",
+      roadType: "main_road",
     },
   ],
 };
 
 const MOCK_FLOOR_PLAN_REQUEST: FloorPlanGenerationRequest = {
-  floor_limits: {
-    max_width: 120,
-    max_length: 100,
+  floorLimits: {
+    maxWidth: 120,
+    maxLength: 100,
   },
-  aspect_ratio: "4:3",
+  aspectRatio: "4:3",
   rooms: [
     {
       id: "bedroom_1",
-      room_type: "bedroom",
+      roomType: "bedroom",
       name: "Bedroom 1",
-      requested_size: "regular",
+      requestedSize: "regular",
       required: true,
     },
     {
       id: "bathroom_1",
-      room_type: "bathroom",
-      requested_size: "regular",
+      roomType: "bathroom",
+      requestedSize: "regular",
     },
     {
       id: "kitchen_1",
-      room_type: "kitchen",
-      requested_size: "regular",
+      roomType: "kitchen",
+      requestedSize: "regular",
     },
     {
       id: "veranda_1",
-      room_type: "veranda",
-      requested_size: "regular",
+      roomType: "veranda",
+      requestedSize: "regular",
     },
   ],
 };
@@ -81,8 +85,10 @@ interface StreamLogEntry {
 
 const MAX_VISIBLE_EVENTS = 500;
 
-const stringifyJson = (value: unknown): string => JSON.stringify(value, null, 2);
-const parseJson = (value: string): unknown => JSON.parse(value) as unknown;
+const stringifyJson = (value: unknown): string => {
+  const serialized = JSON.stringify(value, null, 2);
+  return serialized ?? String(value);
+};
 
 const serializeError = (error: unknown): Record<string, unknown> => {
   if (error instanceof BoundaryServiceError) {
@@ -160,41 +166,40 @@ const JsonPanel = ({
   emptyText,
 }: {
   title: string;
-  value: string;
+  value: unknown | null;
   emptyText: string;
 }) => (
   <div className="min-w-0">
     <h3 className="mb-2 text-sm font-semibold text-slate-800">{title}</h3>
     <pre className="min-h-48 max-h-[34rem] overflow-auto whitespace-pre-wrap break-words rounded-xl border border-slate-800 bg-slate-950 p-4 text-xs leading-5 text-slate-100 shadow-inner">
-      {value || emptyText}
+      {value === null ? emptyText : stringifyJson(value)}
     </pre>
   </div>
 );
 
 const ApiTestPage = () => {
-  const [boundaryInput, setBoundaryInput] = useState(
-    stringifyJson(MOCK_BUILDABLE_SPACE_REQUEST),
-  );
-  const [boundaryOutput, setBoundaryOutput] = useState("");
   const [boundaryState, setBoundaryState] = useState<RequestState>("idle");
+  const [boundaryResult, setBoundaryResult] =
+    useState<BuildableSpaceResult | null>(null);
+  const [boundaryError, setBoundaryError] =
+    useState<Record<string, unknown> | null>(null);
 
-  const [floorPlanInput, setFloorPlanInput] = useState(
-    stringifyJson(MOCK_FLOOR_PLAN_REQUEST),
-  );
   const [streamState, setStreamState] = useState<StreamState>("idle");
   const [jobId, setJobId] = useState<string | null>(null);
-  const [latestFloorPlan, setLatestFloorPlan] = useState("");
-  const [selectedFloorPlan, setSelectedFloorPlan] = useState("");
-  const [terminalOutput, setTerminalOutput] = useState("");
-  const [floorPlanError, setFloorPlanError] = useState("");
+  const [latestFloorPlan, setLatestFloorPlan] =
+    useState<FloorPlanPayload | null>(null);
+  const [selectedFloorPlan, setSelectedFloorPlan] =
+    useState<FloorPlanPayload | null>(null);
+  const [terminalEvent, setTerminalEvent] = useState<
+    CompletedEvent | GenerationErrorEvent | null
+  >(null);
+  const [floorPlanError, setFloorPlanError] =
+    useState<Record<string, unknown> | null>(null);
   const [streamEvents, setStreamEvents] = useState<StreamLogEntry[]>([]);
 
   const sessionRef = useRef<FloorPlanGenerationSession | null>(null);
   const requestControllerRef = useRef<AbortController | null>(null);
   const runIdRef = useRef(0);
-
-  const apiBaseUrl =
-    import.meta.env.VITE_API_BASE_URL?.trim() || "Not configured";
 
   const stopActiveStream = (): void => {
     requestControllerRef.current?.abort("Stopped from the API test page.");
@@ -212,15 +217,17 @@ const ApiTestPage = () => {
 
   const runBoundaryTest = async (): Promise<void> => {
     setBoundaryState("running");
-    setBoundaryOutput("");
+    setBoundaryResult(null);
+    setBoundaryError(null);
 
     try {
-      const request = parseJson(boundaryInput) as BuildableSpaceRequest;
-      const response = await calculateBuildableSpace(request);
-      setBoundaryOutput(stringifyJson(response));
+      const result = await calculateBuildableSpace(
+        MOCK_BUILDABLE_SPACE_REQUEST,
+      );
+      setBoundaryResult(result);
       setBoundaryState("success");
     } catch (error: unknown) {
-      setBoundaryOutput(stringifyJson(serializeError(error)));
+      setBoundaryError(serializeError(error));
       setBoundaryState("error");
     }
   };
@@ -236,17 +243,15 @@ const ApiTestPage = () => {
 
     setStreamState("opening");
     setJobId(null);
-    setLatestFloorPlan("");
-    setSelectedFloorPlan("");
-    setTerminalOutput("");
-    setFloorPlanError("");
+    setLatestFloorPlan(null);
+    setSelectedFloorPlan(null);
+    setTerminalEvent(null);
+    setFloorPlanError(null);
     setStreamEvents([]);
 
     try {
-      const request = parseJson(floorPlanInput) as FloorPlanGenerationRequest;
-
       const session = await startFloorPlanGeneration(
-        request,
+        MOCK_FLOOR_PLAN_REQUEST,
         {
           onOpen: (openedJobId) => {
             if (runIdRef.current !== runId) {
@@ -262,7 +267,7 @@ const ApiTestPage = () => {
               return;
             }
 
-            setJobId(event.job_id);
+            setJobId(event.jobId);
             setStreamEvents((current) => [
               ...current.slice(-(MAX_VISIBLE_EVENTS - 1)),
               {
@@ -272,11 +277,11 @@ const ApiTestPage = () => {
             ]);
 
             if (event.event === "floor_plan") {
-              setLatestFloorPlan(stringifyJson(event));
+              setLatestFloorPlan(event.payload);
             } else if (event.event === "completed") {
-              setTerminalOutput(stringifyJson(event));
+              setTerminalEvent(event);
             } else if (event.event === "error") {
-              setTerminalOutput(stringifyJson(event));
+              setTerminalEvent(event);
               setStreamState("generation_error");
             }
           },
@@ -299,7 +304,7 @@ const ApiTestPage = () => {
               return;
             }
 
-            setFloorPlanError(stringifyJson(serializeError(error)));
+            setFloorPlanError(serializeError(error));
             setStreamState(
               error instanceof FloorPlanServiceError &&
                 error.kind === "generation_error"
@@ -328,8 +333,8 @@ const ApiTestPage = () => {
           }
 
           setJobId(result.jobId);
-          setSelectedFloorPlan(stringifyJson(result.selectedFloorPlanEvent));
-          setTerminalOutput(stringifyJson(result.completedEvent));
+          setSelectedFloorPlan(result.selectedFloorPlan);
+          setTerminalEvent(result.completedEvent);
           setStreamState("completed");
         })
         .catch((error: unknown) => {
@@ -337,7 +342,7 @@ const ApiTestPage = () => {
             return;
           }
 
-          setFloorPlanError(stringifyJson(serializeError(error)));
+          setFloorPlanError(serializeError(error));
           setStreamState(
             error instanceof FloorPlanServiceError &&
               error.kind === "generation_error"
@@ -360,7 +365,7 @@ const ApiTestPage = () => {
         return;
       }
 
-      setFloorPlanError(stringifyJson(serializeError(error)));
+      setFloorPlanError(serializeError(error));
       setStreamState("error");
     }
   };
@@ -370,51 +375,42 @@ const ApiTestPage = () => {
     sessionRef.current?.stream.close();
   };
 
+  const resetBoundaryTest = (): void => {
+    setBoundaryState("idle");
+    setBoundaryResult(null);
+    setBoundaryError(null);
+  };
+
   const resetStreamTest = (): void => {
     runIdRef.current += 1;
     stopActiveStream();
-    setFloorPlanInput(stringifyJson(MOCK_FLOOR_PLAN_REQUEST));
     setStreamState("idle");
     setJobId(null);
-    setLatestFloorPlan("");
-    setSelectedFloorPlan("");
-    setTerminalOutput("");
-    setFloorPlanError("");
+    setLatestFloorPlan(null);
+    setSelectedFloorPlan(null);
+    setTerminalEvent(null);
+    setFloorPlanError(null);
     setStreamEvents([]);
   };
 
   return (
     <div className="min-h-full bg-slate-100 px-4 py-8 sm:px-6 lg:px-8">
       <div className="mx-auto max-w-7xl space-y-8">
-        <header className="rounded-2xl border border-amber-200 bg-amber-50 p-6 shadow-sm">
-          <div className="flex flex-col gap-4 lg:flex-row lg:items-start lg:justify-between">
-            <div>
-              <div className="mb-2 inline-flex rounded-full bg-amber-200 px-3 py-1 text-xs font-bold uppercase tracking-wider text-amber-900">
-                Disposable developer page
-              </div>
-              <h1 className="text-3xl font-bold tracking-tight text-slate-950">
-                API and POST-SSE Test Console
-              </h1>
-              <p className="mt-2 max-w-3xl text-sm leading-6 text-slate-700">
-                Tests buildable space and the direct floor-plan POST SSE stream
-                without integrating either flow into the production UI.
-              </p>
+        <header className="rounded-2xl border border-emerald-200 bg-emerald-50 p-6 shadow-sm">
+          <div className="max-w-4xl">
+            <div className="mb-2 inline-flex rounded-full bg-emerald-200 px-3 py-1 text-xs font-bold uppercase tracking-wider text-emerald-900">
+              Application-level integration example
             </div>
-
-            <dl className="grid min-w-0 gap-3 rounded-xl border border-amber-200 bg-white/70 p-4 text-sm sm:min-w-96">
-              <div>
-                <dt className="font-semibold text-slate-600">API base URL</dt>
-                <dd className="mt-1 break-all font-mono text-xs text-slate-950">
-                  {apiBaseUrl}
-                </dd>
-              </div>
-              <div>
-                <dt className="font-semibold text-slate-600">Stream path</dt>
-                <dd className="mt-1 break-all font-mono text-xs text-slate-950">
-                  {FLOOR_PLAN_STREAM_PATH}
-                </dd>
-              </div>
-            </dl>
+            <h1 className="text-3xl font-bold tracking-tight text-slate-950">
+              Floor-plan Service Usage Console
+            </h1>
+            <p className="mt-2 text-sm leading-6 text-slate-700">
+              This page uses project-level camelCase models from
+              <code className="mx-1 font-mono">src/types</code> and calls only
+              public service operations. Endpoint paths, API request shapes,
+              response validation, SSE parsing, and API-to-project mapping stay
+              private inside the service layer.
+            </p>
           </div>
         </header>
 
@@ -422,63 +418,60 @@ const ApiTestPage = () => {
           <div className="mb-6 flex flex-wrap items-center justify-between gap-3">
             <div>
               <p className="text-xs font-bold uppercase tracking-wider text-indigo-600">
-                Test 1
+                Flow 1
               </p>
               <h2 className="mt-1 text-2xl font-bold text-slate-950">
-                Buildable Space API
+                Buildable-space calculation
               </h2>
               <p className="mt-1 text-sm text-slate-600">
-                Calls <code className="font-mono">POST /buildable-space</code>.
+                Calls <code className="font-mono">calculateBuildableSpace()</code>
+                with a typed application request and receives a typed application
+                result.
               </p>
             </div>
             <StatusBadge status={boundaryState} />
           </div>
 
           <div className="grid gap-6 xl:grid-cols-2">
-            <div>
-              <label
-                className="mb-2 block text-sm font-semibold text-slate-800"
-                htmlFor="boundary-request"
-              >
-                Mock request JSON
-              </label>
-              <textarea
-                id="boundary-request"
-                value={boundaryInput}
-                onChange={(event: ChangeEvent<HTMLTextAreaElement>) =>
-                  setBoundaryInput(event.target.value)
-                }
-                spellCheck={false}
-                className="min-h-[30rem] w-full resize-y rounded-xl border border-slate-300 bg-slate-950 p-4 font-mono text-xs leading-5 text-slate-100 outline-none transition focus:border-indigo-500 focus:ring-2 focus:ring-indigo-200"
+            <div className="space-y-4">
+              <JsonPanel
+                title="Application request model"
+                value={MOCK_BUILDABLE_SPACE_REQUEST}
+                emptyText="No request configured."
               />
-              <div className="mt-4 flex flex-wrap gap-3">
+              <div className="flex flex-wrap gap-3">
                 <button
                   type="button"
                   onClick={() => void runBoundaryTest()}
                   disabled={boundaryState === "running"}
                   className="rounded-lg bg-indigo-600 px-4 py-2.5 text-sm font-semibold text-white shadow-sm transition hover:bg-indigo-700 disabled:cursor-not-allowed disabled:opacity-50"
                 >
-                  {boundaryState === "running" ? "Sending..." : "Send request"}
+                  {boundaryState === "running"
+                    ? "Calculating..."
+                    : "Calculate buildable space"}
                 </button>
                 <button
                   type="button"
-                  onClick={() => {
-                    setBoundaryInput(stringifyJson(MOCK_BUILDABLE_SPACE_REQUEST));
-                    setBoundaryOutput("");
-                    setBoundaryState("idle");
-                  }}
+                  onClick={resetBoundaryTest}
                   className="rounded-lg border border-slate-300 bg-white px-4 py-2.5 text-sm font-semibold text-slate-700 transition hover:bg-slate-50"
                 >
-                  Reset mock
+                  Clear result
                 </button>
               </div>
             </div>
 
-            <JsonPanel
-              title="Validated response or typed error"
-              value={boundaryOutput}
-              emptyText="The API response will appear here."
-            />
+            <div className="space-y-6">
+              <JsonPanel
+                title="Application result"
+                value={boundaryResult}
+                emptyText="The mapped BuildableSpaceResult will appear here."
+              />
+              <JsonPanel
+                title="Typed service error"
+                value={boundaryError}
+                emptyText="Boundary errors will appear here."
+              />
+            </div>
           </div>
         </section>
 
@@ -486,45 +479,37 @@ const ApiTestPage = () => {
           <div className="mb-6 flex flex-wrap items-center justify-between gap-3">
             <div>
               <p className="text-xs font-bold uppercase tracking-wider text-purple-600">
-                Test 2
+                Flow 2
               </p>
               <h2 className="mt-1 text-2xl font-bold text-slate-950">
-                Floor-plan POST SSE stream
+                Floor-plan generation session
               </h2>
               <p className="mt-1 text-sm text-slate-600">
-                Calls <code className="font-mono">POST {FLOOR_PLAN_STREAM_PATH}</code>{" "}
-                and parses SSE frames from the response body.
+                Calls <code className="font-mono">startFloorPlanGeneration()</code>
+                and consumes mapped project-level events and completion data.
               </p>
             </div>
             <StatusBadge status={streamState} />
           </div>
 
           <div className="grid gap-6 xl:grid-cols-2">
-            <div>
-              <label
-                className="mb-2 block text-sm font-semibold text-slate-800"
-                htmlFor="floor-plan-request"
-              >
-                Mock generation request JSON
-              </label>
-              <textarea
-                id="floor-plan-request"
-                value={floorPlanInput}
-                onChange={(event: ChangeEvent<HTMLTextAreaElement>) =>
-                  setFloorPlanInput(event.target.value)
-                }
-                spellCheck={false}
-                className="min-h-[34rem] w-full resize-y rounded-xl border border-slate-300 bg-slate-950 p-4 font-mono text-xs leading-5 text-slate-100 outline-none transition focus:border-purple-500 focus:ring-2 focus:ring-purple-200"
+            <div className="space-y-4">
+              <JsonPanel
+                title="Application generation request"
+                value={MOCK_FLOOR_PLAN_REQUEST}
+                emptyText="No request configured."
               />
 
-              <div className="mt-4 flex flex-wrap gap-3">
+              <div className="flex flex-wrap gap-3">
                 <button
                   type="button"
                   onClick={() => void startStreamTest()}
                   disabled={streamState === "opening" || streamState === "open"}
                   className="rounded-lg bg-purple-600 px-4 py-2.5 text-sm font-semibold text-white shadow-sm transition hover:bg-purple-700 disabled:cursor-not-allowed disabled:opacity-50"
                 >
-                  {streamState === "opening" ? "Opening..." : "Start stream"}
+                  {streamState === "opening"
+                    ? "Opening..."
+                    : "Generate floor plan"}
                 </button>
                 <button
                   type="button"
@@ -532,45 +517,45 @@ const ApiTestPage = () => {
                   disabled={streamState !== "open" && streamState !== "opening"}
                   className="rounded-lg border border-rose-300 bg-white px-4 py-2.5 text-sm font-semibold text-rose-700 transition hover:bg-rose-50 disabled:cursor-not-allowed disabled:opacity-50"
                 >
-                  Abort stream
+                  Abort generation
                 </button>
                 <button
                   type="button"
                   onClick={resetStreamTest}
                   className="rounded-lg border border-slate-300 bg-white px-4 py-2.5 text-sm font-semibold text-slate-700 transition hover:bg-slate-50"
                 >
-                  Reset mock
+                  Clear session
                 </button>
               </div>
 
-              <div className="mt-6 rounded-xl border border-slate-200 bg-slate-50 p-4">
+              <div className="rounded-xl border border-slate-200 bg-slate-50 p-4">
                 <p className="text-sm font-semibold text-slate-800">Job ID</p>
                 <p className="mt-2 break-all font-mono text-xs text-slate-700">
-                  {jobId ?? "Waiting for the response header or first event"}
+                  {jobId ?? "Waiting for the service session"}
                 </p>
               </div>
             </div>
 
             <div className="space-y-6">
               <JsonPanel
-                title="Latest received floor_plan event"
+                title="Latest mapped floor-plan payload"
                 value={latestFloorPlan}
                 emptyText="The latest usable or presentable plan will appear here."
               />
               <JsonPanel
-                title="Final selected floor_plan event"
+                title="Final selected floor-plan payload"
                 value={selectedFloorPlan}
-                emptyText="On completed, this uses final_floor_plan_sequence exactly."
+                emptyText="The service-selected final plan will appear here."
               />
               <JsonPanel
-                title="Terminal completed/error event"
-                value={terminalOutput}
-                emptyText="The terminal stream event will appear here."
+                title="Terminal mapped event"
+                value={terminalEvent}
+                emptyText="The completed or generation-error event will appear here."
               />
               <JsonPanel
-                title="HTTP, generation, protocol, or connection error"
+                title="Typed service error"
                 value={floorPlanError}
-                emptyText="Typed service errors will appear here."
+                emptyText="Transport, protocol, validation, or generation errors will appear here."
               />
             </div>
           </div>
@@ -579,7 +564,7 @@ const ApiTestPage = () => {
             <div className="mb-3 flex flex-wrap items-center justify-between gap-3">
               <div>
                 <h3 className="text-lg font-bold text-slate-950">
-                  Live SSE event log
+                  Project-level event log
                 </h3>
                 <p className="text-sm text-slate-600">
                   Latest {MAX_VISIBLE_EVENTS} events maximum. Current count:{" "}
@@ -598,7 +583,7 @@ const ApiTestPage = () => {
             <div className="max-h-[42rem] overflow-auto rounded-xl border border-slate-800 bg-slate-950 p-4">
               {streamEvents.length === 0 ? (
                 <p className="font-mono text-xs text-slate-400">
-                  Stream events will appear here.
+                  Mapped service events will appear here.
                 </p>
               ) : (
                 <div className="space-y-4">
@@ -614,7 +599,9 @@ const ApiTestPage = () => {
                         <span className="text-slate-400">
                           sequence {entry.event.sequence}
                         </span>
-                        <span className="text-slate-500">{entry.receivedAt}</span>
+                        <span className="text-slate-500">
+                          {entry.receivedAt}
+                        </span>
                       </div>
                       <pre className="overflow-auto whitespace-pre-wrap break-words text-xs leading-5 text-slate-100">
                         {stringifyJson(entry.event)}
@@ -628,9 +615,10 @@ const ApiTestPage = () => {
         </section>
 
         <aside className="rounded-2xl border border-sky-200 bg-sky-50 p-5 text-sm leading-6 text-sky-950">
-          Sequence gaps are valid. The client keeps floor-plan events by sequence
-          and selects only the event named by completed.payload.final_floor_plan_sequence.
-          Aborting stops local delivery but does not cancel server computation.
+          This component does not know the server endpoint, snake_case API
+          fields, raw SSE frames, or final-plan selection protocol. The service
+          validates and maps those details, then exposes application models and
+          a generation-session abstraction.
         </aside>
       </div>
     </div>

@@ -1,84 +1,97 @@
 # Service Layer
 
-This folder contains server communication, runtime contract validation, and reusable transport helpers. It does not contain React state, drawing logic, or production page behavior.
+This folder is the boundary between the application and the server.
+
+- API contract types stay private inside each service folder.
+- Runtime validators validate only API-shaped data.
+- Mappers convert application models to API requests and API responses/events to application models.
+- The rest of the application imports its data types from `src/types`.
 
 ## Structure
 
 ```text
-service/
-├── http/          # API URL builder and shared Axios client
-├── transport/     # Reusable fetch-response SSE parser
-├── validation/    # Reusable primitive runtime validators
-├── boundary/      # POST /buildable-space
-└── floor-plan/    # POST /generation/stream
+src/
+├── types/
+│   ├── geometry.ts
+│   ├── boundary.ts
+│   ├── floor-plan.ts
+│   └── index.ts
+└── service/
+    ├── boundary/
+    │   ├── boundary.api.types.ts
+    │   ├── boundary.mapper.ts
+    │   ├── boundary.validators.ts
+    │   ├── boundary.service.ts
+    │   └── index.ts
+    └── floor-plan/
+        ├── floor-plan.api.types.ts
+        ├── floor-plan.mapper.ts
+        ├── floor-plan.service.types.ts
+        ├── floor-plan.validators.ts
+        ├── floor-plan.service.ts
+        └── index.ts
 ```
 
-## Floor-plan stream
-
-The floor-plan endpoint is SSE over POST:
+## Dependency rule
 
 ```text
-POST /generation/stream
-  -> validate request
-  -> fetch with Accept: text/event-stream
-  -> read response.body
-  -> buffer complete SSE frames
-  -> validate every envelope and event payload
-  -> retain floor_plan events by sequence
-  -> select completed.final_floor_plan_sequence
+Application -> src/types
+Service mapper -> src/types + private API types
+Validator/transport -> private API types
 ```
 
-Browser `EventSource` is not used because it only performs GET and cannot send the JSON request body.
+Files outside a service folder must not import `*.api.types.ts` or a mapper directly.
 
-## Usage
+## Boundary usage
 
 ```ts
-import {
-  startFloorPlanGeneration,
-  type FloorPlanGenerationRequest,
-} from "./service/floor-plan";
+import { calculateBuildableSpace } from "./service/boundary";
+import type { BuildableSpaceRequest } from "./types";
+
+const request: BuildableSpaceRequest = {
+  landBoundary: {
+    points: [
+      { x: 0, y: 0 },
+      { x: 100, y: 0 },
+      { x: 100, y: 80 },
+      { x: 0, y: 80 },
+    ],
+  },
+  roads: [
+    {
+      boundaryEdgeIndex: 0,
+      role: "main_entry",
+      roadType: "main_road",
+    },
+  ],
+};
+
+const result = await calculateBuildableSpace(request);
+console.log(result.usableLand.width);
+```
+
+## Floor-plan stream usage
+
+```ts
+import { startFloorPlanGeneration } from "./service/floor-plan";
+import type { FloorPlanGenerationRequest } from "./types";
 
 const request: FloorPlanGenerationRequest = {
-  floor_limits: { max_width: 120, max_length: 100 },
-  aspect_ratio: "4:3",
+  floorLimits: { maxWidth: 120, maxLength: 100 },
+  aspectRatio: "4:3",
   rooms: [
-    { id: "bedroom_1", room_type: "bedroom" },
-    { id: "bathroom_1", room_type: "bathroom" },
-    { id: "kitchen_1", room_type: "kitchen" },
-    { id: "veranda_1", room_type: "veranda" },
+    { id: "bedroom_1", roomType: "bedroom" },
+    { id: "bathroom_1", roomType: "bathroom" },
+    { id: "kitchen_1", roomType: "kitchen" },
   ],
 };
 
 const session = await startFloorPlanGeneration(request, {
-  onOpen: (jobId) => console.log("Opened", jobId),
-  onEvent: (event) => console.log(event.event, event.payload),
-  onClose: (reason) => console.log("Closed", reason),
-  onError: (error) => console.error(error),
+  onEvent: (event) => {
+    console.log(event.jobId, event.event, event.payload);
+  },
 });
 
 const result = await session.completion;
-console.log("Final plan", result.selectedFloorPlan);
-
-// This only closes local delivery. It does not cancel server computation.
-session.stream.close();
-```
-
-## Environment
-
-Docker Compose commonly exposes the API on port `8001`:
-
-```env
-VITE_API_BASE_URL=http://127.0.0.1:8001
-```
-
-A directly launched Uvicorn server commonly uses port `8000`:
-
-```env
-VITE_API_BASE_URL=http://127.0.0.1:8000
-```
-
-The default stream path is `/generation/stream`. Override it only when the deployed server uses a different relative route:
-
-```env
-VITE_FLOOR_PLAN_STREAM_PATH=/generation/stream
+console.log(result.selectedFloorPlan.floorPlan);
 ```

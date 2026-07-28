@@ -1,3 +1,5 @@
+import type { Point, Polygon } from "./geometry";
+
 export const ROOM_TYPES = [
   "bedroom",
   "bathroom",
@@ -10,54 +12,42 @@ export const ROOM_TYPES = [
   "garage",
   "open_area",
 ] as const;
-
 export type RoomType = (typeof ROOM_TYPES)[number];
 
-export interface FloorLimitsRequest {
-  max_width: number;
-  max_length: number;
+export interface FloorLimits {
+  maxWidth: number;
+  maxLength: number;
 }
 
-export interface GenerationRoomRequest {
-  room_type: RoomType;
+export interface GenerationRoom {
+  roomType: RoomType;
   id?: string | null;
   name?: string | null;
-  requested_size?: string | null;
+  requestedSize?: string | null;
   required?: boolean;
 }
 
-export interface GenerationRequest {
-  floor_limits: FloorLimitsRequest;
-  aspect_ratio: number | string;
-  rooms: GenerationRoomRequest[];
-}
-
-export type FloorPlanGenerationRequest = GenerationRequest;
-
-export interface Point {
-  x: number;
-  y: number;
-}
-
-export interface Polygon {
-  points: Point[];
+export interface FloorPlanGenerationRequest {
+  floorLimits: FloorLimits;
+  aspectRatio: number | string;
+  rooms: GenerationRoom[];
 }
 
 export const ROOM_ROLES = ["standard", "solver_placeholder"] as const;
 export type RoomRole = (typeof ROOM_ROLES)[number];
 
 export interface RoomMetadata {
-  source_room_ids: string[];
-  applied_transformations: string[];
+  sourceRoomIds: string[];
+  appliedTransformations: string[];
 }
 
 export interface FloorPlanRoom {
   id: string;
-  room_type: RoomType;
+  roomType: RoomType;
   name: string;
   boundary: Polygon;
   role: RoomRole;
-  parent_room_id: string | null;
+  parentRoomId: string | null;
   metadata: RoomMetadata;
 }
 
@@ -74,19 +64,19 @@ export type OpeningPurpose = (typeof OPENING_PURPOSES)[number];
 
 export interface FloorPlanOpening {
   id: string;
-  opening_type: OpeningType;
+  openingType: OpeningType;
   purpose: OpeningPurpose;
   start: Point;
   end: Point;
-  connected_room_ids: string[];
+  connectedRoomIds: string[];
 }
 
 export interface FloorPlan {
   boundary: Polygon;
   rooms: FloorPlanRoom[];
   openings: FloorPlanOpening[];
-  identity_redirects: Record<string, string>;
-  applied_transformations: string[];
+  identityRedirects: Record<string, string>;
+  appliedTransformations: string[];
 }
 
 export const EVALUATION_STATUSES = [
@@ -117,36 +107,42 @@ export interface ScoreFinding {
   code: string;
   message: string;
   severity: FindingSeverity;
-  subject_ids: string[];
+  subjectIds: string[];
   metrics: ScoreMetric[];
 }
 
 export interface ScoringGroupResult {
-  group_key: string;
+  groupKey: string;
   status: GroupStatus;
-  normalized_maximum: number;
-  raw_score: number | null;
+  normalizedMaximum: number;
+  rawScore: number | null;
   contribution: number;
 }
 
+export interface EnclosedVoid {
+  points: Array<[number, number]>;
+  area: number;
+  affectsScore: boolean;
+}
+
 export interface EnclosedVoidsVisualizationData {
-  area_tolerance: number;
-  voids: Array<{
-    points: Array<[number, number]>;
-    area: number;
-    affects_score: boolean;
-  }>;
+  kind: "enclosed_voids";
+  areaTolerance: number;
+  voids: EnclosedVoid[];
+}
+
+export interface InwardRecessPocket {
+  pocketIndex: number;
+  points: Array<[number, number]>;
+  measuredLength: number;
+  violatesMaximum: boolean;
 }
 
 export interface InwardRecessVisualizationData {
-  maximum_length: number;
+  kind: "inward_recess";
+  maximumLength: number;
   tolerance: number;
-  pockets: Array<{
-    pocket_index: number;
-    points: Array<[number, number]>;
-    measured_length: number;
-    violates_maximum: boolean;
-  }>;
+  pockets: InwardRecessPocket[];
 }
 
 export type EvaluatorVisualizationPayload =
@@ -155,86 +151,33 @@ export type EvaluatorVisualizationPayload =
   | null;
 
 export interface EvaluatorExecutionResult {
-  evaluator_key: string;
-  group_key: string;
+  evaluatorKey: string;
+  groupKey: string;
   status: EvaluationStatus;
-  raw_score: number | null;
-  configured_weight: number;
-  normalized_weight: number;
+  rawScore: number | null;
+  configuredWeight: number;
+  normalizedWeight: number;
   contribution: number;
   threshold: number | null;
-  passed_threshold: boolean | null;
+  passedThreshold: boolean | null;
   findings: ScoreFinding[];
   metrics: ScoreMetric[];
-  visualization_payload: EvaluatorVisualizationPayload;
+  visualizationPayload: EvaluatorVisualizationPayload;
 }
 
 export interface FloorPlanScoring {
-  total_score: number;
-  passed_critical: boolean;
-  critical_failure: ScoreFinding | null;
-  group_results: ScoringGroupResult[];
-  evaluator_results: EvaluatorExecutionResult[];
+  totalScore: number;
+  passedCritical: boolean;
+  criticalFailure: ScoreFinding | null;
+  groupResults: ScoringGroupResult[];
+  evaluatorResults: EvaluatorExecutionResult[];
   findings: ScoreFinding[];
 }
 
-/** Backward-compatible alias for the previous placeholder scoring type. */
-export type ScoringResult = FloorPlanScoring;
-
 export interface GenerationResponse {
-  floor_plan: FloorPlan;
+  floorPlan: FloorPlan;
   scoring: FloorPlanScoring;
 }
-
-export const GENERATION_STAGES = [
-  "preprocessing",
-  "candidate_search",
-  "candidate_scoring",
-  "solver",
-  "refinement",
-  "post_processing",
-  "openings",
-  "attempt_scoring",
-  "scoring",
-  "visualization",
-  "final_validation",
-] as const;
-export type GenerationStage = (typeof GENERATION_STAGES)[number];
-
-export interface GenerationErrorResponse {
-  stage: GenerationStage | string;
-  code: string;
-  message: string;
-  details: Record<string, unknown> | null;
-}
-
-export interface ValidationIssue {
-  type: string;
-  loc: Array<string | number>;
-  msg: string;
-  input?: unknown;
-  ctx?: Record<string, unknown>;
-}
-
-export interface HttpValidationError {
-  detail: ValidationIssue[];
-}
-
-/** Backward-compatible aliases. */
-export type FastApiValidationIssue = ValidationIssue;
-export type FastApiValidationErrorResponse = HttpValidationError;
-
-export interface UnexpectedGenerationErrorResponse {
-  message: string;
-}
-
-export type GenerationHttpErrorBody =
-  | GenerationErrorResponse
-  | HttpValidationError
-  | UnexpectedGenerationErrorResponse
-  | Record<string, unknown>
-  | string
-  | null;
 
 export const GENERATION_EVENT_NAMES = [
   "status",
@@ -271,44 +214,41 @@ export interface StatusPayload {
 }
 
 export interface CandidateHint {
-  room_id: string;
+  roomId: string;
   x: number;
   y: number;
-  room_type: RoomType | null;
-  hint_index: number;
+  roomType: RoomType | null;
+  hintIndex: number;
 }
 
 export interface CandidateTrialPayload {
-  trial_number: number;
-  trial_limit: number;
-  candidate_hints: CandidateHint[];
+  trialNumber: number;
+  trialLimit: number;
+  candidateHints: CandidateHint[];
 }
 
 export interface ProgressPayload {
   stage: string;
-  trial_number: number;
-  trial_limit: number;
-  elapsed_ms: number;
-  timeout_ms: number;
+  trialNumber: number;
+  trialLimit: number;
+  elapsedMs: number;
+  timeoutMs: number;
 }
 
 export interface FloorPlanPayload {
   classification: FloorPlanClassification;
-  trial_number: number | null;
-  candidate_id: number;
-  solver_run_id: number;
+  trialNumber: number | null;
+  candidateId: number;
+  solverRunId: number;
   score: number;
-  passed_critical: boolean;
-  floor_plan: FloorPlan;
+  passedCritical: boolean;
+  floorPlan: FloorPlan;
 }
-
-/** Backward-compatible alias used by the disposable test page. */
-export type FloorPlanEventPayload = FloorPlanPayload;
 
 export interface CompletedPayload {
   outcome: CompletionOutcome;
-  final_floor_plan_sequence: number | null;
-  elapsed_ms: number;
+  finalFloorPlanSequence: number | null;
+  elapsedMs: number;
 }
 
 export interface StreamErrorPayload {
@@ -318,26 +258,17 @@ export interface StreamErrorPayload {
   recoverable: boolean;
 }
 
-/** Backward-compatible alias. */
-export type ErrorPayload = StreamErrorPayload;
-
 export interface GenerationEventEnvelope<
   TEvent extends GenerationEventName,
   TPayload,
 > {
-  schema_version: 1;
+  schemaVersion: 1;
   sequence: number;
   timestamp: string;
-  job_id: string;
+  jobId: string;
   event: TEvent;
   payload: TPayload;
 }
-
-/** Backward-compatible alias. */
-export type StreamEnvelope<
-  TEvent extends GenerationEventName,
-  TPayload,
-> = GenerationEventEnvelope<TEvent, TPayload>;
 
 export type StatusEvent = GenerationEventEnvelope<"status", StatusPayload>;
 export type CandidateTrialEvent = GenerationEventEnvelope<
@@ -366,5 +297,9 @@ export type GenerationSseEvent =
   | CompletedEvent
   | GenerationErrorEvent;
 
-/** Backward-compatible alias. */
-export type GenerationStreamEvent = GenerationSseEvent;
+export interface FloorPlanGenerationResult {
+  jobId: string;
+  completedEvent: CompletedEvent;
+  selectedFloorPlanEvent: FloorPlanEvent;
+  selectedFloorPlan: FloorPlanPayload;
+}

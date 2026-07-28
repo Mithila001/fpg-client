@@ -1,6 +1,11 @@
 import axios from "axios";
 import { httpClient } from "../http";
+import type { BuildableSpaceRequest, BuildableSpaceResult } from "../../types";
 import { BoundaryServiceError } from "./boundary.errors";
+import {
+  fromBuildableSpaceApiResponse,
+  toBuildableSpaceApiRequest,
+} from "./boundary.mapper";
 import {
   assertBuildableSpaceRequest,
   parseBuildableSpaceErrorResponse,
@@ -8,8 +13,8 @@ import {
 } from "./boundary.validators";
 import type {
   BuildableSpaceErrorResponse,
-  BuildableSpaceRequest,
-  BuildableSpaceResponse,
+  BuildableSpaceRequest as ApiBuildableSpaceRequest,
+  BuildableSpaceResponse as ApiBuildableSpaceResponse,
 } from "./boundary.api.types";
 
 const readFlowIdHeader = (headers: unknown): string | undefined => {
@@ -52,7 +57,7 @@ const parseSuccessResponse = (
   data: unknown,
   status: number,
   headerFlowId: string | undefined,
-): BuildableSpaceResponse => {
+): ApiBuildableSpaceResponse => {
   try {
     const result = parseBuildableSpaceResponse(data);
     assertFlowIdConsistency(result.flow_id, headerFlowId);
@@ -104,17 +109,26 @@ const parseErrorResponse = (
 
 export const calculateBuildableSpace = async (
   request: BuildableSpaceRequest,
-): Promise<BuildableSpaceResponse> => {
-  assertBuildableSpaceRequest(request);
+): Promise<BuildableSpaceResult> => {
+  const apiRequest: ApiBuildableSpaceRequest =
+    toBuildableSpaceApiRequest(request);
+
+  assertBuildableSpaceRequest(apiRequest);
 
   try {
-    const response = await httpClient.post<unknown>("buildable-space", request, {
+    const response = await httpClient.post<unknown>("buildable-space", apiRequest, {
       validateStatus: () => true,
     });
     const headerFlowId = readFlowIdHeader(response.headers);
 
     if (response.status === 200) {
-      return parseSuccessResponse(response.data, response.status, headerFlowId);
+      const apiResponse = parseSuccessResponse(
+        response.data,
+        response.status,
+        headerFlowId,
+      );
+
+      return fromBuildableSpaceApiResponse(apiResponse);
     }
 
     if (response.status === 422 || response.status === 500) {
