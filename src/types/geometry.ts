@@ -1,6 +1,8 @@
+import type { ProjectLength } from "./measurement";
+
 export interface Point {
-  x: number;
-  y: number;
+  x: ProjectLength;
+  y: ProjectLength;
 }
 
 export interface Polygon {

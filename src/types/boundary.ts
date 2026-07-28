@@ -1,4 +1,5 @@
 import type { Polygon } from "./geometry";
+import type { ProjectArea, ProjectLength } from "./measurement";
 
 export const ROAD_ROLES = ["main_entry"] as const;
 export type RoadRole = (typeof ROAD_ROLES)[number];
@@ -29,23 +30,23 @@ export interface BuildableSpaceRequest {
 export interface EdgeSetback {
   edgeIndex: number;
   side: BoundarySide;
-  baseSetback: number;
-  roadAdjustment: number;
-  finalSetback: number;
+  baseSetback: ProjectLength;
+  roadAdjustment: ProjectLength;
+  finalSetback: ProjectLength;
   roadType: RoadType | null;
 }
 
 export interface BuildableLand {
   boundary: Polygon;
-  area: number;
+  area: ProjectArea;
   edgeSetbacks: EdgeSetback[];
 }
 
 export interface UsableLand {
   boundary: Polygon;
-  width: number;
-  length: number;
-  area: number;
+  width: ProjectLength;
+  length: ProjectLength;
+  area: ProjectArea;
   floorWidthAlignment: FloorWidthAlignment;
   entryRoadEdgeIndex: number;
 }
@@ -53,7 +54,7 @@ export interface UsableLand {
 export interface BuildableSpaceResult {
   flowId: string;
   projectUnitsPerMeter: number;
-  originalLandArea: number;
+  originalLandArea: ProjectArea;
   buildableLand: BuildableLand;
   usableLand: UsableLand;
   referenceProfile: string;

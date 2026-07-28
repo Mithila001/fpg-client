@@ -1,3 +1,4 @@
+import { PROJECT_UNITS_PER_METER } from "../../measurement";
 import type {
   BuildableSpaceRequest as AppBuildableSpaceRequest,
   BuildableSpaceResult,
@@ -5,6 +6,13 @@ import type {
   Point,
   Polygon,
 } from "../../types";
+import {
+  API_PROJECT_UNITS_PER_METER,
+  apiAreaToProjectArea,
+  apiLengthToProjectLength,
+  projectAreaToApiArea,
+  projectLengthToApiLength,
+} from "../measurement";
 import type {
   BuildableSpaceRequest as ApiBuildableSpaceRequest,
   BuildableSpaceResponse as ApiBuildableSpaceResponse,
@@ -13,39 +21,79 @@ import type {
   PolygonResponse as ApiPolygon,
 } from "./boundary.api.types";
 
-const toApiPoint = (point: Point): ApiPoint => ({
-  x: point.x,
-  y: point.y,
+const toApiPoint = (
+  point: Point,
+  apiUnitsPerMeter: number,
+): ApiPoint => ({
+  x: projectLengthToApiLength(point.x, apiUnitsPerMeter),
+  y: projectLengthToApiLength(point.y, apiUnitsPerMeter),
 });
 
-const fromApiPoint = (point: ApiPoint): Point => ({
-  x: point.x,
-  y: point.y,
+const fromApiPoint = (
+  point: ApiPoint,
+  apiUnitsPerMeter: number,
+): Point => ({
+  x: apiLengthToProjectLength(point.x, apiUnitsPerMeter),
+  y: apiLengthToProjectLength(point.y, apiUnitsPerMeter),
 });
 
-const toApiPolygon = (polygon: Polygon): ApiPolygon => ({
-  points: polygon.points.map(toApiPoint),
+const toApiPolygon = (
+  polygon: Polygon,
+  apiUnitsPerMeter: number,
+): ApiPolygon => ({
+  points: polygon.points.map((point) =>
+    toApiPoint(point, apiUnitsPerMeter),
+  ),
 });
 
-const fromApiPolygon = (polygon: ApiPolygon): Polygon => ({
-  points: polygon.points.map(fromApiPoint),
+const fromApiPolygon = (
+  polygon: ApiPolygon,
+  apiUnitsPerMeter: number,
+): Polygon => ({
+  points: polygon.points.map((point) =>
+    fromApiPoint(point, apiUnitsPerMeter),
+  ),
 });
 
-const toApiEdgeSetback = (setback: EdgeSetback): ApiEdgeSetbackResponse => ({
+const toApiEdgeSetback = (
+  setback: EdgeSetback,
+  apiUnitsPerMeter: number,
+): ApiEdgeSetbackResponse => ({
   edge_index: setback.edgeIndex,
   side: setback.side,
-  base_setback: setback.baseSetback,
-  road_adjustment: setback.roadAdjustment,
-  final_setback: setback.finalSetback,
+  base_setback: projectLengthToApiLength(
+    setback.baseSetback,
+    apiUnitsPerMeter,
+  ),
+  road_adjustment: projectLengthToApiLength(
+    setback.roadAdjustment,
+    apiUnitsPerMeter,
+  ),
+  final_setback: projectLengthToApiLength(
+    setback.finalSetback,
+    apiUnitsPerMeter,
+  ),
   road_type: setback.roadType,
 });
 
-const fromApiEdgeSetback = (setback: ApiEdgeSetbackResponse): EdgeSetback => ({
+const fromApiEdgeSetback = (
+  setback: ApiEdgeSetbackResponse,
+  apiUnitsPerMeter: number,
+): EdgeSetback => ({
   edgeIndex: setback.edge_index,
   side: setback.side,
-  baseSetback: setback.base_setback,
-  roadAdjustment: setback.road_adjustment,
-  finalSetback: setback.final_setback,
+  baseSetback: apiLengthToProjectLength(
+    setback.base_setback,
+    apiUnitsPerMeter,
+  ),
+  roadAdjustment: apiLengthToProjectLength(
+    setback.road_adjustment,
+    apiUnitsPerMeter,
+  ),
+  finalSetback: apiLengthToProjectLength(
+    setback.final_setback,
+    apiUnitsPerMeter,
+  ),
   roadType: setback.road_type,
 });
 
@@ -53,7 +101,9 @@ export const toBuildableSpaceApiRequest = (
   request: AppBuildableSpaceRequest,
 ): ApiBuildableSpaceRequest => ({
   land_boundary: {
-    points: request.landBoundary.points.map(toApiPoint),
+    points: request.landBoundary.points.map((point) =>
+      toApiPoint(point, API_PROJECT_UNITS_PER_METER),
+    ),
   },
   roads: request.roads.map((road) => ({
     boundary_edge_index: road.boundaryEdgeIndex,
@@ -66,7 +116,9 @@ export const fromBuildableSpaceApiRequest = (
   request: ApiBuildableSpaceRequest,
 ): AppBuildableSpaceRequest => ({
   landBoundary: {
-    points: request.land_boundary.points.map(fromApiPoint),
+    points: request.land_boundary.points.map((point) =>
+      fromApiPoint(point, API_PROJECT_UNITS_PER_METER),
+    ),
   },
   roads: request.roads.map((road) => ({
     boundaryEdgeIndex: road.boundary_edge_index,
@@ -77,48 +129,87 @@ export const fromBuildableSpaceApiRequest = (
 
 export const fromBuildableSpaceApiResponse = (
   response: ApiBuildableSpaceResponse,
-): BuildableSpaceResult => ({
-  flowId: response.flow_id,
-  projectUnitsPerMeter: response.units.project_units_per_meter,
-  originalLandArea: response.original_land.area,
-  buildableLand: {
-    boundary: fromApiPolygon(response.buildable_land.boundary),
-    area: response.buildable_land.area,
-    edgeSetbacks: response.buildable_land.edge_setbacks.map(fromApiEdgeSetback),
-  },
-  usableLand: {
-    boundary: fromApiPolygon(response.usable_land.boundary),
-    width: response.usable_land.width,
-    length: response.usable_land.length,
-    area: response.usable_land.area,
-    floorWidthAlignment: response.usable_land.floor_width_alignment,
-    entryRoadEdgeIndex: response.usable_land.entry_road_edge_index,
-  },
-  referenceProfile: response.reference_profile,
-});
+): BuildableSpaceResult => {
+  const apiUnitsPerMeter = response.units.project_units_per_meter;
+
+  return {
+    flowId: response.flow_id,
+    projectUnitsPerMeter: PROJECT_UNITS_PER_METER,
+    originalLandArea: apiAreaToProjectArea(
+      response.original_land.area,
+      apiUnitsPerMeter,
+    ),
+    buildableLand: {
+      boundary: fromApiPolygon(
+        response.buildable_land.boundary,
+        apiUnitsPerMeter,
+      ),
+      area: apiAreaToProjectArea(
+        response.buildable_land.area,
+        apiUnitsPerMeter,
+      ),
+      edgeSetbacks: response.buildable_land.edge_setbacks.map((setback) =>
+        fromApiEdgeSetback(setback, apiUnitsPerMeter),
+      ),
+    },
+    usableLand: {
+      boundary: fromApiPolygon(response.usable_land.boundary, apiUnitsPerMeter),
+      width: apiLengthToProjectLength(
+        response.usable_land.width,
+        apiUnitsPerMeter,
+      ),
+      length: apiLengthToProjectLength(
+        response.usable_land.length,
+        apiUnitsPerMeter,
+      ),
+      area: apiAreaToProjectArea(
+        response.usable_land.area,
+        apiUnitsPerMeter,
+      ),
+      floorWidthAlignment: response.usable_land.floor_width_alignment,
+      entryRoadEdgeIndex: response.usable_land.entry_road_edge_index,
+    },
+    referenceProfile: response.reference_profile,
+  };
+};
 
 export const toBuildableSpaceApiResponse = (
   result: BuildableSpaceResult,
-): ApiBuildableSpaceResponse => ({
-  flow_id: result.flowId,
-  units: {
-    project_units_per_meter: result.projectUnitsPerMeter,
-  },
-  original_land: {
-    area: result.originalLandArea,
-  },
-  buildable_land: {
-    boundary: toApiPolygon(result.buildableLand.boundary),
-    area: result.buildableLand.area,
-    edge_setbacks: result.buildableLand.edgeSetbacks.map(toApiEdgeSetback),
-  },
-  usable_land: {
-    boundary: toApiPolygon(result.usableLand.boundary),
-    width: result.usableLand.width,
-    length: result.usableLand.length,
-    area: result.usableLand.area,
-    floor_width_alignment: result.usableLand.floorWidthAlignment,
-    entry_road_edge_index: result.usableLand.entryRoadEdgeIndex,
-  },
-  reference_profile: result.referenceProfile,
-});
+): ApiBuildableSpaceResponse => {
+  const apiUnitsPerMeter = API_PROJECT_UNITS_PER_METER;
+
+  return {
+    flow_id: result.flowId,
+    units: {
+      project_units_per_meter: apiUnitsPerMeter,
+    },
+    original_land: {
+      area: projectAreaToApiArea(result.originalLandArea, apiUnitsPerMeter),
+    },
+    buildable_land: {
+      boundary: toApiPolygon(result.buildableLand.boundary, apiUnitsPerMeter),
+      area: projectAreaToApiArea(
+        result.buildableLand.area,
+        apiUnitsPerMeter,
+      ),
+      edge_setbacks: result.buildableLand.edgeSetbacks.map((setback) =>
+        toApiEdgeSetback(setback, apiUnitsPerMeter),
+      ),
+    },
+    usable_land: {
+      boundary: toApiPolygon(result.usableLand.boundary, apiUnitsPerMeter),
+      width: projectLengthToApiLength(
+        result.usableLand.width,
+        apiUnitsPerMeter,
+      ),
+      length: projectLengthToApiLength(
+        result.usableLand.length,
+        apiUnitsPerMeter,
+      ),
+      area: projectAreaToApiArea(result.usableLand.area, apiUnitsPerMeter),
+      floor_width_alignment: result.usableLand.floorWidthAlignment,
+      entry_road_edge_index: result.usableLand.entryRoadEdgeIndex,
+    },
+    reference_profile: result.referenceProfile,
+  };
+};

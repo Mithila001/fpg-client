@@ -20,7 +20,7 @@ const Home: React.FC = () => {
 
         <h1 className="text-5xl md:text-7xl font-extrabold tracking-tight text-slate-900 mb-6 drop-shadow-sm">
           Explore your dream Floor Plan <br className="hidden md:block" />
-          <span className="text-transparent bg-clip-text bg-gradient-to-r from-indigo-600 to-purple-600">
+          <span className="text-transparent bg-clip-text bg-linear-to-r from-indigo-600 to-purple-600">
             in minutes.
           </span>
         </h1>

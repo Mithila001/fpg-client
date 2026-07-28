@@ -628,7 +628,7 @@ const Canvas: React.FC = () => {
           </div>
         </div>
 
-        <div className="w-[28%] min-w-[340px] overflow-auto border-l border-slate-200 bg-white shadow-[-4px_0_24px_-12px_rgba(0,0,0,0.1)] z-10">
+        <div className="w-[28%] min-w-85 overflow-auto border-l border-slate-200 bg-white shadow-[-4px_0_24px_-12px_rgba(0,0,0,0.1)] z-10">
           <div className="flex flex-col gap-6 p-6">
             <section className="flex flex-col rounded-xl border border-slate-200/80 bg-slate-50/50 p-5 shadow-sm transition-all hover:shadow-md">
               <div className="mb-4 flex items-center justify-between">
@@ -716,7 +716,7 @@ const Canvas: React.FC = () => {
                   <button
                     onClick={handleRunAlgorithm}
                     disabled={isRunningAlgorithm || isGeneratingFloorPlan}
-                    className="mt-2 w-full rounded-lg bg-gradient-to-r from-indigo-600 to-blue-600 px-4 py-3 text-sm font-bold text-white shadow-md transition-all hover:from-indigo-700 hover:to-blue-700 hover:shadow-lg focus:outline-none focus:ring-2 focus:ring-indigo-500/50 active:scale-[0.98] disabled:pointer-events-none disabled:opacity-50"
+                    className="mt-2 w-full rounded-lg bg-linear-to-r from-indigo-600 to-blue-600 px-4 py-3 text-sm font-bold text-white shadow-md transition-all hover:from-indigo-700 hover:to-blue-700 hover:shadow-lg focus:outline-none focus:ring-2 focus:ring-indigo-500/50 active:scale-[0.98] disabled:pointer-events-none disabled:opacity-50"
                   >
                     {isRunningAlgorithm ? "Running Analysis..." : "Find Buildable Space"}
                   </button>
@@ -810,7 +810,7 @@ const Canvas: React.FC = () => {
               <button
                 onClick={handleGenerateFloorPlan}
                 disabled={!submittedRequirements || isRunningAlgorithm || isGeneratingFloorPlan}
-                className="mt-5 w-full rounded-xl bg-gradient-to-r from-emerald-500 to-teal-600 px-4 py-3.5 text-sm font-bold text-white shadow-md transition-all hover:from-emerald-600 hover:to-teal-700 hover:shadow-lg focus:outline-none focus:ring-2 focus:ring-emerald-500/50 active:scale-[0.98] disabled:pointer-events-none disabled:opacity-50 relative overflow-hidden group"
+                className="mt-5 w-full rounded-xl bg-linear-to-r from-emerald-500 to-teal-600 px-4 py-3.5 text-sm font-bold text-white shadow-md transition-all hover:from-emerald-600 hover:to-teal-700 hover:shadow-lg focus:outline-none focus:ring-2 focus:ring-emerald-500/50 active:scale-[0.98] disabled:pointer-events-none disabled:opacity-50 relative overflow-hidden group"
               >
                 <div className="absolute inset-0 bg-white/20 translate-y-full group-hover:translate-y-0 transition-transform duration-300 ease-out" />
                 <span className="relative">

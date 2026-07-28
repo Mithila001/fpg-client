@@ -1,5 +1,17 @@
 import { useEffect, useRef, useState } from "react";
 import {
+  formatProjectArea,
+  formatProjectLength,
+  PROJECT_AREA_UNITS_PER_SQUARE_METER,
+  PROJECT_UNITS_PER_METER,
+  parseDisplayArea,
+  parseDisplayLength,
+  projectAreaToSquareFeet,
+  projectAreaToSquareMeters,
+  projectLengthToFeet,
+  projectLengthToMeters,
+} from "../../measurement";
+import {
   BoundaryServiceError,
   calculateBuildableSpace,
 } from "../../service/boundary";
@@ -8,15 +20,164 @@ import {
   startFloorPlanGeneration,
   type FloorPlanGenerationSession,
 } from "../../service/floor-plan";
+import {
+  apiAreaToProjectArea,
+  apiLengthToProjectLength,
+  projectAreaToApiArea,
+  projectLengthToApiLength,
+} from "../../service/measurement";
 import type {
   BuildableSpaceRequest,
   BuildableSpaceResult,
   CompletedEvent,
+  DisplayAreaUnit,
+  DisplayLengthUnit,
   FloorPlanGenerationRequest,
   FloorPlanPayload,
   GenerationErrorEvent,
   GenerationSseEvent,
+  ProjectArea,
+  ProjectLength,
 } from "../../types";
+
+
+const NUMERIC_TOLERANCE = 1e-9;
+
+interface UnitEvaluationCase {
+  name: string;
+  category: "length" | "area" | "API boundary" | "format and input";
+  actual: number | string | null;
+  expected: number | string | null;
+  passed: boolean;
+}
+
+const parseFiniteInput = (value: string): number | null => {
+  const parsed = Number.parseFloat(value.trim());
+  return Number.isFinite(parsed) ? parsed : null;
+};
+
+const parsePositiveFiniteInput = (value: string): number | null => {
+  const parsed = parseFiniteInput(value);
+  return parsed !== null && parsed > 0 ? parsed : null;
+};
+
+const valuesMatch = (
+  actual: UnitEvaluationCase["actual"],
+  expected: UnitEvaluationCase["expected"],
+): boolean => {
+  if (typeof actual === "number" && typeof expected === "number") {
+    return (
+      Math.abs(actual - expected) <=
+      NUMERIC_TOLERANCE * Math.max(1, Math.abs(expected))
+    );
+  }
+
+  return actual === expected;
+};
+
+const createUnitEvaluationCase = (
+  name: string,
+  category: UnitEvaluationCase["category"],
+  actual: UnitEvaluationCase["actual"],
+  expected: UnitEvaluationCase["expected"],
+): UnitEvaluationCase => ({
+  name,
+  category,
+  actual,
+  expected,
+  passed: valuesMatch(actual, expected),
+});
+
+const UNIT_EVALUATION_CASES: UnitEvaluationCase[] = [
+  createUnitEvaluationCase(
+    "10 project units equal 1 meter",
+    "length",
+    projectLengthToMeters(10),
+    1,
+  ),
+  createUnitEvaluationCase(
+    "1 meter becomes 10 project units",
+    "format and input",
+    parseDisplayLength("1", "meter"),
+    10,
+  ),
+  createUnitEvaluationCase(
+    "100 project units display as 32.80839895 feet",
+    "length",
+    projectLengthToFeet(100),
+    32.80839895013123,
+  ),
+  createUnitEvaluationCase(
+    "100 project area units equal 1 square meter",
+    "area",
+    projectAreaToSquareMeters(100),
+    1,
+  ),
+  createUnitEvaluationCase(
+    "1 square meter becomes 100 project area units",
+    "format and input",
+    parseDisplayArea("1", "square-meter"),
+    100,
+  ),
+  createUnitEvaluationCase(
+    "10,000 project area units display as 1,076.39104167 square feet",
+    "area",
+    projectAreaToSquareFeet(10_000),
+    1076.2323,
+  ),
+  createUnitEvaluationCase(
+    "Length formatting uses the selected display unit",
+    "format and input",
+    formatProjectLength(100, "meter"),
+    "10 m",
+  ),
+  createUnitEvaluationCase(
+    "Area formatting uses squared units",
+    "format and input",
+    formatProjectArea(10_000, "square-meter"),
+    "100 m²",
+  ),
+  createUnitEvaluationCase(
+    "Same-scale API length remains unchanged",
+    "API boundary",
+    apiLengthToProjectLength(250, 10),
+    250,
+  ),
+  createUnitEvaluationCase(
+    "Same-scale API area remains unchanged",
+    "API boundary",
+    apiAreaToProjectArea(40_000, 10),
+    40_000,
+  ),
+  createUnitEvaluationCase(
+    "Future API length scale 100 units/m maps into project scale 10 units/m",
+    "API boundary",
+    apiLengthToProjectLength(100, 100),
+    10,
+  ),
+  createUnitEvaluationCase(
+    "Future API area scale uses the squared ratio",
+    "API boundary",
+    apiAreaToProjectArea(10_000, 100),
+    100,
+  ),
+  createUnitEvaluationCase(
+    "Future API length conversion round-trips",
+    "API boundary",
+    projectLengthToApiLength(apiLengthToProjectLength(1234, 100), 100),
+    1234,
+  ),
+  createUnitEvaluationCase(
+    "Future API area conversion round-trips",
+    "API boundary",
+    projectAreaToApiArea(apiAreaToProjectArea(123_456, 100), 100),
+    123_456,
+  ),
+];
+
+const UNIT_EVALUATION_PASSED = UNIT_EVALUATION_CASES.every(
+  (evaluation) => evaluation.passed,
+);
 
 const MOCK_BUILDABLE_SPACE_REQUEST: BuildableSpaceRequest = {
   landBoundary: {
@@ -69,6 +230,7 @@ const MOCK_FLOOR_PLAN_REQUEST: FloorPlanGenerationRequest = {
 };
 
 type RequestState = "idle" | "running" | "success" | "error";
+type UnitEvaluationState = "pass" | "fail";
 type StreamState =
   | "idle"
   | "opening"
@@ -133,13 +295,17 @@ const serializeError = (error: unknown): Record<string, unknown> => {
   };
 };
 
-const statusClass = (status: RequestState | StreamState): string => {
+const statusClass = (
+  status: RequestState | StreamState | UnitEvaluationState,
+): string => {
   switch (status) {
     case "success":
+    case "pass":
     case "open":
     case "completed":
       return "bg-emerald-100 text-emerald-800 ring-emerald-200";
     case "error":
+    case "fail":
     case "generation_error":
       return "bg-rose-100 text-rose-800 ring-rose-200";
     case "running":
@@ -152,7 +318,11 @@ const statusClass = (status: RequestState | StreamState): string => {
   }
 };
 
-const StatusBadge = ({ status }: { status: RequestState | StreamState }) => (
+const StatusBadge = ({
+  status,
+}: {
+  status: RequestState | StreamState | UnitEvaluationState;
+}) => (
   <span
     className={`inline-flex rounded-full px-2.5 py-1 text-xs font-semibold uppercase tracking-wide ring-1 ${statusClass(status)}`}
   >
@@ -178,6 +348,110 @@ const JsonPanel = ({
 );
 
 const ApiTestPage = () => {
+  const [displayLengthUnit, setDisplayLengthUnit] =
+    useState<DisplayLengthUnit>("meter");
+  const [displayAreaUnit, setDisplayAreaUnit] =
+    useState<DisplayAreaUnit>("square-meter");
+  const [projectLengthInput, setProjectLengthInput] = useState("100");
+  const [projectAreaInput, setProjectAreaInput] = useState("10000");
+  const [displayLengthInput, setDisplayLengthInput] = useState("10");
+  const [displayAreaInput, setDisplayAreaInput] = useState("100");
+  const [apiUnitsPerMeterInput, setApiUnitsPerMeterInput] = useState("10");
+  const [apiLengthInput, setApiLengthInput] = useState("100");
+  const [apiAreaInput, setApiAreaInput] = useState("10000");
+
+  const projectLengthValue = parseFiniteInput(projectLengthInput);
+  const projectAreaValue = parseFiniteInput(projectAreaInput);
+  const parsedDisplayLength = parseDisplayLength(
+    displayLengthInput,
+    displayLengthUnit,
+  );
+  const parsedDisplayArea = parseDisplayArea(displayAreaInput, displayAreaUnit);
+  const apiUnitsPerMeter = parsePositiveFiniteInput(apiUnitsPerMeterInput);
+  const apiLengthValue = parseFiniteInput(apiLengthInput);
+  const apiAreaValue = parseFiniteInput(apiAreaInput);
+
+  const projectToDisplayPreview = {
+    scale: {
+      length: `${PROJECT_UNITS_PER_METER} project units = 1 meter`,
+      area: `${PROJECT_AREA_UNITS_PER_SQUARE_METER} project area units = 1 square meter`,
+    },
+    length:
+      projectLengthValue === null
+        ? null
+        : {
+            projectUnits: projectLengthValue,
+            meters: projectLengthToMeters(projectLengthValue as ProjectLength),
+            feet: projectLengthToFeet(projectLengthValue as ProjectLength),
+            formatted: formatProjectLength(
+              projectLengthValue as ProjectLength,
+              displayLengthUnit,
+            ),
+          },
+    area:
+      projectAreaValue === null
+        ? null
+        : {
+            projectAreaUnits: projectAreaValue,
+            squareMeters: projectAreaToSquareMeters(
+              projectAreaValue as ProjectArea,
+            ),
+            squareFeet: projectAreaToSquareFeet(projectAreaValue as ProjectArea),
+            formatted: formatProjectArea(
+              projectAreaValue as ProjectArea,
+              displayAreaUnit,
+            ),
+          },
+  };
+
+  const displayToProjectPreview = {
+    length: {
+      input: displayLengthInput,
+      unit: displayLengthUnit,
+      projectUnits: parsedDisplayLength,
+    },
+    area: {
+      input: displayAreaInput,
+      unit: displayAreaUnit,
+      projectAreaUnits: parsedDisplayArea,
+    },
+  };
+
+  const apiBoundaryPreview =
+    apiUnitsPerMeter === null
+      ? null
+      : {
+          apiUnitsPerMeter,
+          applicationUnitsPerMeter: PROJECT_UNITS_PER_METER,
+          length:
+            apiLengthValue === null
+              ? null
+              : {
+                  apiValue: apiLengthValue,
+                  projectValue: apiLengthToProjectLength(
+                    apiLengthValue,
+                    apiUnitsPerMeter,
+                  ),
+                  apiRoundTrip: projectLengthToApiLength(
+                    apiLengthToProjectLength(apiLengthValue, apiUnitsPerMeter),
+                    apiUnitsPerMeter,
+                  ),
+                },
+          area:
+            apiAreaValue === null
+              ? null
+              : {
+                  apiValue: apiAreaValue,
+                  projectValue: apiAreaToProjectArea(
+                    apiAreaValue,
+                    apiUnitsPerMeter,
+                  ),
+                  apiRoundTrip: projectAreaToApiArea(
+                    apiAreaToProjectArea(apiAreaValue, apiUnitsPerMeter),
+                    apiUnitsPerMeter,
+                  ),
+                },
+        };
   const [boundaryState, setBoundaryState] = useState<RequestState>("idle");
   const [boundaryResult, setBoundaryResult] =
     useState<BuildableSpaceResult | null>(null);
@@ -413,6 +687,260 @@ const ApiTestPage = () => {
             </p>
           </div>
         </header>
+
+        <section className="rounded-2xl border border-cyan-200 bg-white p-6 shadow-sm">
+          <div className="mb-6 flex flex-wrap items-center justify-between gap-3">
+            <div>
+              <p className="text-xs font-bold uppercase tracking-wider text-cyan-700">
+                Flow 0
+              </p>
+              <h2 className="mt-1 text-2xl font-bold text-slate-950">
+                Unit conversion evaluation
+              </h2>
+              <p className="mt-1 max-w-4xl text-sm leading-6 text-slate-600">
+                Exercises project-to-display conversion, user-input parsing, and
+                the API/application measurement boundary. The canonical project
+                scale is 10 units per meter, so area uses 100 project area units
+                per square meter.
+              </p>
+            </div>
+            <StatusBadge status={UNIT_EVALUATION_PASSED ? "pass" : "fail"} />
+          </div>
+
+          <div className="grid gap-6 xl:grid-cols-3">
+            <div className="space-y-4 rounded-xl border border-slate-200 bg-slate-50 p-4">
+              <div>
+                <h3 className="font-bold text-slate-950">
+                  Project units to visual units
+                </h3>
+                <p className="mt-1 text-xs leading-5 text-slate-600">
+                  Change the project values and choose how they should be shown
+                  to the user.
+                </p>
+              </div>
+
+              <label className="block text-sm font-semibold text-slate-800">
+                Project length
+                <input
+                  type="number"
+                  value={projectLengthInput}
+                  onChange={(event) => setProjectLengthInput(event.target.value)}
+                  className="mt-1 w-full rounded-lg border border-slate-300 bg-white px-3 py-2 font-mono text-sm outline-none ring-cyan-500 focus:ring-2"
+                />
+              </label>
+
+              <label className="block text-sm font-semibold text-slate-800">
+                Length display unit
+                <select
+                  value={displayLengthUnit}
+                  onChange={(event) =>
+                    setDisplayLengthUnit(event.target.value as DisplayLengthUnit)
+                  }
+                  className="mt-1 w-full rounded-lg border border-slate-300 bg-white px-3 py-2 text-sm outline-none ring-cyan-500 focus:ring-2"
+                >
+                  <option value="meter">Meter</option>
+                  <option value="foot">Foot</option>
+                </select>
+              </label>
+
+              <label className="block text-sm font-semibold text-slate-800">
+                Project area
+                <input
+                  type="number"
+                  value={projectAreaInput}
+                  onChange={(event) => setProjectAreaInput(event.target.value)}
+                  className="mt-1 w-full rounded-lg border border-slate-300 bg-white px-3 py-2 font-mono text-sm outline-none ring-cyan-500 focus:ring-2"
+                />
+              </label>
+
+              <label className="block text-sm font-semibold text-slate-800">
+                Area display unit
+                <select
+                  value={displayAreaUnit}
+                  onChange={(event) =>
+                    setDisplayAreaUnit(event.target.value as DisplayAreaUnit)
+                  }
+                  className="mt-1 w-full rounded-lg border border-slate-300 bg-white px-3 py-2 text-sm outline-none ring-cyan-500 focus:ring-2"
+                >
+                  <option value="square-meter">Square meter</option>
+                  <option value="square-foot">Square foot</option>
+                </select>
+              </label>
+
+              <JsonPanel
+                title="Conversion result"
+                value={projectToDisplayPreview}
+                emptyText="Enter valid project measurements."
+              />
+            </div>
+
+            <div className="space-y-4 rounded-xl border border-slate-200 bg-slate-50 p-4">
+              <div>
+                <h3 className="font-bold text-slate-950">
+                  User input to project units
+                </h3>
+                <p className="mt-1 text-xs leading-5 text-slate-600">
+                  These fields use the selected display units and immediately
+                  normalize the input into canonical project units.
+                </p>
+              </div>
+
+              <label className="block text-sm font-semibold text-slate-800">
+                User-entered length ({displayLengthUnit})
+                <input
+                  type="number"
+                  value={displayLengthInput}
+                  onChange={(event) => setDisplayLengthInput(event.target.value)}
+                  className="mt-1 w-full rounded-lg border border-slate-300 bg-white px-3 py-2 font-mono text-sm outline-none ring-cyan-500 focus:ring-2"
+                />
+              </label>
+
+              <label className="block text-sm font-semibold text-slate-800">
+                User-entered area ({displayAreaUnit})
+                <input
+                  type="number"
+                  value={displayAreaInput}
+                  onChange={(event) => setDisplayAreaInput(event.target.value)}
+                  className="mt-1 w-full rounded-lg border border-slate-300 bg-white px-3 py-2 font-mono text-sm outline-none ring-cyan-500 focus:ring-2"
+                />
+              </label>
+
+              <JsonPanel
+                title="Normalized application values"
+                value={displayToProjectPreview}
+                emptyText="Enter valid display measurements."
+              />
+            </div>
+
+            <div className="space-y-4 rounded-xl border border-slate-200 bg-slate-50 p-4">
+              <div>
+                <h3 className="font-bold text-slate-950">
+                  API boundary scale simulator
+                </h3>
+                <p className="mt-1 text-xs leading-5 text-slate-600">
+                  Use 10 for today&apos;s pass-through contract or 100 to simulate
+                  a future API scale. Area conversion must use the squared scale.
+                </p>
+              </div>
+
+              <label className="block text-sm font-semibold text-slate-800">
+                API units per meter
+                <input
+                  type="number"
+                  min="0.000001"
+                  step="any"
+                  value={apiUnitsPerMeterInput}
+                  onChange={(event) =>
+                    setApiUnitsPerMeterInput(event.target.value)
+                  }
+                  className="mt-1 w-full rounded-lg border border-slate-300 bg-white px-3 py-2 font-mono text-sm outline-none ring-cyan-500 focus:ring-2"
+                />
+              </label>
+
+              <label className="block text-sm font-semibold text-slate-800">
+                API length value
+                <input
+                  type="number"
+                  value={apiLengthInput}
+                  onChange={(event) => setApiLengthInput(event.target.value)}
+                  className="mt-1 w-full rounded-lg border border-slate-300 bg-white px-3 py-2 font-mono text-sm outline-none ring-cyan-500 focus:ring-2"
+                />
+              </label>
+
+              <label className="block text-sm font-semibold text-slate-800">
+                API area value
+                <input
+                  type="number"
+                  value={apiAreaInput}
+                  onChange={(event) => setApiAreaInput(event.target.value)}
+                  className="mt-1 w-full rounded-lg border border-slate-300 bg-white px-3 py-2 font-mono text-sm outline-none ring-cyan-500 focus:ring-2"
+                />
+              </label>
+
+              <div className="flex flex-wrap gap-2">
+                <button
+                  type="button"
+                  onClick={() => {
+                    setApiUnitsPerMeterInput("10");
+                    setApiLengthInput("100");
+                    setApiAreaInput("10000");
+                  }}
+                  className="rounded-lg border border-slate-300 bg-white px-3 py-2 text-xs font-semibold text-slate-700 transition hover:bg-slate-100"
+                >
+                  Current API scale
+                </button>
+                <button
+                  type="button"
+                  onClick={() => {
+                    setApiUnitsPerMeterInput("100");
+                    setApiLengthInput("100");
+                    setApiAreaInput("10000");
+                  }}
+                  className="rounded-lg border border-cyan-300 bg-cyan-50 px-3 py-2 text-xs font-semibold text-cyan-800 transition hover:bg-cyan-100"
+                >
+                  Future scale example
+                </button>
+              </div>
+
+              <JsonPanel
+                title="API/application round trip"
+                value={apiBoundaryPreview}
+                emptyText="API units per meter must be greater than zero."
+              />
+            </div>
+          </div>
+
+          <div className="mt-8 border-t border-slate-200 pt-6">
+            <div className="mb-4 flex flex-wrap items-center justify-between gap-3">
+              <div>
+                <h3 className="text-lg font-bold text-slate-950">
+                  Deterministic conversion checks
+                </h3>
+                <p className="text-sm text-slate-600">
+                  {UNIT_EVALUATION_CASES.filter((item) => item.passed).length} of{" "}
+                  {UNIT_EVALUATION_CASES.length} checks passed.
+                </p>
+              </div>
+            </div>
+
+            <div className="overflow-x-auto rounded-xl border border-slate-200">
+              <table className="min-w-full divide-y divide-slate-200 text-left text-sm">
+                <thead className="bg-slate-100 text-xs uppercase tracking-wide text-slate-600">
+                  <tr>
+                    <th className="px-4 py-3 font-bold">Status</th>
+                    <th className="px-4 py-3 font-bold">Category</th>
+                    <th className="px-4 py-3 font-bold">Check</th>
+                    <th className="px-4 py-3 font-bold">Actual</th>
+                    <th className="px-4 py-3 font-bold">Expected</th>
+                  </tr>
+                </thead>
+                <tbody className="divide-y divide-slate-200 bg-white">
+                  {UNIT_EVALUATION_CASES.map((evaluation) => (
+                    <tr key={evaluation.name}>
+                      <td className="px-4 py-3">
+                        <StatusBadge
+                          status={evaluation.passed ? "pass" : "fail"}
+                        />
+                      </td>
+                      <td className="whitespace-nowrap px-4 py-3 text-slate-600">
+                        {evaluation.category}
+                      </td>
+                      <td className="min-w-80 px-4 py-3 font-medium text-slate-900">
+                        {evaluation.name}
+                      </td>
+                      <td className="px-4 py-3 font-mono text-xs text-slate-700">
+                        {String(evaluation.actual)}
+                      </td>
+                      <td className="px-4 py-3 font-mono text-xs text-slate-700">
+                        {String(evaluation.expected)}
+                      </td>
+                    </tr>
+                  ))}
+                </tbody>
+              </table>
+            </div>
+          </div>
+        </section>
 
         <section className="rounded-2xl border border-slate-200 bg-white p-6 shadow-sm">
           <div className="mb-6 flex flex-wrap items-center justify-between gap-3">

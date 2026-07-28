@@ -95,3 +95,18 @@ const session = await startFloorPlanGeneration(request, {
 const result = await session.completion;
 console.log(result.selectedFloorPlan.floorPlan);
 ```
+
+## Measurement boundary
+
+Application geometry always uses `10 project units = 1 meter`. API mappers must
+call the helpers from `src/service/measurement` for every coordinate, length,
+and area field.
+
+Length and area are intentionally separate:
+
+- Length uses the units-per-meter factor once.
+- Area uses the square of the units-per-meter factor.
+
+The boundary API response declares `project_units_per_meter`; its mapper uses
+that response value. The floor-plan API currently uses the constant in
+`src/service/measurement/api-measurement.mapper.ts`.

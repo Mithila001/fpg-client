@@ -64,9 +64,22 @@ import type {
   StatusPayload as ApiStatusPayload,
   StreamErrorPayload as ApiStreamErrorPayload,
 } from "./floor-plan.api.types";
+import {
+  apiAreaToProjectArea,
+  apiLengthToProjectLength,
+  projectAreaToApiArea,
+  projectLengthToApiLength,
+} from "../measurement";
 
-const toApiPoint = (point: Point): ApiPoint => ({ x: point.x, y: point.y });
-const fromApiPoint = (point: ApiPoint): Point => ({ x: point.x, y: point.y });
+const toApiPoint = (point: Point): ApiPoint => ({
+  x: projectLengthToApiLength(point.x),
+  y: projectLengthToApiLength(point.y),
+});
+
+const fromApiPoint = (point: ApiPoint): Point => ({
+  x: apiLengthToProjectLength(point.x),
+  y: apiLengthToProjectLength(point.y),
+});
 
 const toApiPolygon = (polygon: Polygon): ApiPolygon => ({
   points: polygon.points.map(toApiPoint),
@@ -100,8 +113,8 @@ export const toFloorPlanGenerationApiRequest = (
   request: FloorPlanGenerationRequest,
 ): ApiGenerationRequest => ({
   floor_limits: {
-    max_width: request.floorLimits.maxWidth,
-    max_length: request.floorLimits.maxLength,
+    max_width: projectLengthToApiLength(request.floorLimits.maxWidth),
+    max_length: projectLengthToApiLength(request.floorLimits.maxLength),
   },
   aspect_ratio: request.aspectRatio,
   rooms: request.rooms.map(toApiGenerationRoom),
@@ -111,8 +124,8 @@ export const fromFloorPlanGenerationApiRequest = (
   request: ApiGenerationRequest,
 ): FloorPlanGenerationRequest => ({
   floorLimits: {
-    maxWidth: request.floor_limits.max_width,
-    maxLength: request.floor_limits.max_length,
+    maxWidth: apiLengthToProjectLength(request.floor_limits.max_width),
+    maxLength: apiLengthToProjectLength(request.floor_limits.max_length),
   },
   aspectRatio: request.aspect_ratio,
   rooms: request.rooms.map(fromApiGenerationRoom),
@@ -237,10 +250,13 @@ const fromApiScoringGroupResult = (
 const toApiEnclosedVoids = (
   payload: EnclosedVoidsVisualizationData,
 ): ApiEnclosedVoidsVisualizationData => ({
-  area_tolerance: payload.areaTolerance,
+  area_tolerance: projectAreaToApiArea(payload.areaTolerance),
   voids: payload.voids.map((item) => ({
-    points: item.points.map(([x, y]) => [x, y]),
-    area: item.area,
+    points: item.points.map(([x, y]) => [
+      projectLengthToApiLength(x),
+      projectLengthToApiLength(y),
+    ]),
+    area: projectAreaToApiArea(item.area),
     affects_score: item.affectsScore,
   })),
 });
@@ -249,10 +265,13 @@ const fromApiEnclosedVoids = (
   payload: ApiEnclosedVoidsVisualizationData,
 ): EnclosedVoidsVisualizationData => ({
   kind: "enclosed_voids",
-  areaTolerance: payload.area_tolerance,
+  areaTolerance: apiAreaToProjectArea(payload.area_tolerance),
   voids: payload.voids.map((item) => ({
-    points: item.points.map(([x, y]) => [x, y]),
-    area: item.area,
+    points: item.points.map(([x, y]) => [
+      apiLengthToProjectLength(x),
+      apiLengthToProjectLength(y),
+    ]),
+    area: apiAreaToProjectArea(item.area),
     affectsScore: item.affects_score,
   })),
 });
@@ -260,12 +279,15 @@ const fromApiEnclosedVoids = (
 const toApiInwardRecess = (
   payload: InwardRecessVisualizationData,
 ): ApiInwardRecessVisualizationData => ({
-  maximum_length: payload.maximumLength,
-  tolerance: payload.tolerance,
+  maximum_length: projectLengthToApiLength(payload.maximumLength),
+  tolerance: projectLengthToApiLength(payload.tolerance),
   pockets: payload.pockets.map((pocket) => ({
     pocket_index: pocket.pocketIndex,
-    points: pocket.points.map(([x, y]) => [x, y]),
-    measured_length: pocket.measuredLength,
+    points: pocket.points.map(([x, y]) => [
+      projectLengthToApiLength(x),
+      projectLengthToApiLength(y),
+    ]),
+    measured_length: projectLengthToApiLength(pocket.measuredLength),
     violates_maximum: pocket.violatesMaximum,
   })),
 });
@@ -274,12 +296,15 @@ const fromApiInwardRecess = (
   payload: ApiInwardRecessVisualizationData,
 ): InwardRecessVisualizationData => ({
   kind: "inward_recess",
-  maximumLength: payload.maximum_length,
-  tolerance: payload.tolerance,
+  maximumLength: apiLengthToProjectLength(payload.maximum_length),
+  tolerance: apiLengthToProjectLength(payload.tolerance),
   pockets: payload.pockets.map((pocket) => ({
     pocketIndex: pocket.pocket_index,
-    points: pocket.points.map(([x, y]) => [x, y]),
-    measuredLength: pocket.measured_length,
+    points: pocket.points.map(([x, y]) => [
+      apiLengthToProjectLength(x),
+      apiLengthToProjectLength(y),
+    ]),
+    measuredLength: apiLengthToProjectLength(pocket.measured_length),
     violatesMaximum: pocket.violates_maximum,
   })),
 });
@@ -396,16 +421,16 @@ const fromApiStatusPayload = (payload: ApiStatusPayload): StatusPayload => ({
 
 const toApiCandidateHint = (hint: CandidateHint): ApiCandidateHint => ({
   room_id: hint.roomId,
-  x: hint.x,
-  y: hint.y,
+  x: projectLengthToApiLength(hint.x),
+  y: projectLengthToApiLength(hint.y),
   room_type: hint.roomType,
   hint_index: hint.hintIndex,
 });
 
 const fromApiCandidateHint = (hint: ApiCandidateHint): CandidateHint => ({
   roomId: hint.room_id,
-  x: hint.x,
-  y: hint.y,
+  x: apiLengthToProjectLength(hint.x),
+  y: apiLengthToProjectLength(hint.y),
   roomType: hint.room_type,
   hintIndex: hint.hint_index,
 });

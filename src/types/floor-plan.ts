@@ -1,4 +1,5 @@
 import type { Point, Polygon } from "./geometry";
+import type { ProjectArea, ProjectLength } from "./measurement";
 
 export const ROOM_TYPES = [
   "bedroom",
@@ -15,8 +16,8 @@ export const ROOM_TYPES = [
 export type RoomType = (typeof ROOM_TYPES)[number];
 
 export interface FloorLimits {
-  maxWidth: number;
-  maxLength: number;
+  maxWidth: ProjectLength;
+  maxLength: ProjectLength;
 }
 
 export interface GenerationRoom {
@@ -120,28 +121,28 @@ export interface ScoringGroupResult {
 }
 
 export interface EnclosedVoid {
-  points: Array<[number, number]>;
-  area: number;
+  points: Array<[ProjectLength, ProjectLength]>;
+  area: ProjectArea;
   affectsScore: boolean;
 }
 
 export interface EnclosedVoidsVisualizationData {
   kind: "enclosed_voids";
-  areaTolerance: number;
+  areaTolerance: ProjectArea;
   voids: EnclosedVoid[];
 }
 
 export interface InwardRecessPocket {
   pocketIndex: number;
-  points: Array<[number, number]>;
-  measuredLength: number;
+  points: Array<[ProjectLength, ProjectLength]>;
+  measuredLength: ProjectLength;
   violatesMaximum: boolean;
 }
 
 export interface InwardRecessVisualizationData {
   kind: "inward_recess";
-  maximumLength: number;
-  tolerance: number;
+  maximumLength: ProjectLength;
+  tolerance: ProjectLength;
   pockets: InwardRecessPocket[];
 }
 
@@ -215,8 +216,8 @@ export interface StatusPayload {
 
 export interface CandidateHint {
   roomId: string;
-  x: number;
-  y: number;
+  x: ProjectLength;
+  y: ProjectLength;
   roomType: RoomType | null;
   hintIndex: number;
 }
