@@ -1,3 +1,5 @@
+import { createPrimitiveValidators } from "../validation";
+import type { ValidationFailure } from "../validation";
 import { BoundaryServiceError } from "./boundary.errors";
 import type {
   BoundarySide,
@@ -13,16 +15,20 @@ import type {
   RoadType,
 } from "./boundary.api.types";
 
-type UnknownRecord = Record<string, unknown>;
-
-type ValidationTarget = "request" | "response";
-
 const ROAD_TYPES: readonly RoadType[] = ["main_road", "private_road"];
-const BOUNDARY_SIDES: readonly BoundarySide[] = ["front", "back", "left", "right"];
+
+const BOUNDARY_SIDES: readonly BoundarySide[] = [
+  "front",
+  "back",
+  "left",
+  "right",
+];
+
 const FLOOR_WIDTH_ALIGNMENTS: readonly FloorWidthAlignment[] = [
   "parallel_to_entry_road",
   "perpendicular_to_entry_road",
 ];
+
 const ERROR_STAGES: readonly BuildableSpaceErrorStage[] = [
   "request_validation",
   "reference_data",
@@ -30,6 +36,7 @@ const ERROR_STAGES: readonly BuildableSpaceErrorStage[] = [
   "usable_land",
   "response",
 ];
+
 const ERROR_CODES: readonly BuildableSpaceErrorCode[] = [
   "invalid_request",
   "invalid_land_boundary",
@@ -47,123 +54,32 @@ const ERROR_CODES: readonly BuildableSpaceErrorCode[] = [
   "unexpected_buildable_space_error",
 ];
 
-const fail = (target: ValidationTarget, path: string, reason: string): never => {
+const failBoundaryValidation: ValidationFailure = (
+  target,
+  path,
+  reason,
+): never => {
   throw new BoundaryServiceError({
     kind: target === "request" ? "invalid_request" : "invalid_response",
     message: `Invalid buildable-space ${target} at ${path}: ${reason}`,
   });
 };
 
-const asRecord = (
-  value: unknown,
-  path: string,
-  target: ValidationTarget,
-): UnknownRecord => {
-  if (typeof value !== "object" || value === null || Array.isArray(value)) {
-    return fail(target, path, "expected an object");
-  }
-
-  return value as UnknownRecord;
-};
-
-const asArray = (
-  value: unknown,
-  path: string,
-  target: ValidationTarget,
-): unknown[] => {
-  if (!Array.isArray(value)) {
-    return fail(target, path, "expected an array");
-  }
-
-  return value;
-};
-
-const asString = (
-  value: unknown,
-  path: string,
-  target: ValidationTarget,
-): string => {
-  if (typeof value !== "string" || value.length === 0) {
-    return fail(target, path, "expected a non-empty string");
-  }
-
-  return value;
-};
-
-const asFiniteNumber = (
-  value: unknown,
-  path: string,
-  target: ValidationTarget,
-): number => {
-  if (typeof value !== "number" || !Number.isFinite(value)) {
-    return fail(target, path, "expected a finite number");
-  }
-
-  return value;
-};
-
-const asNonNegativeNumber = (
-  value: unknown,
-  path: string,
-  target: ValidationTarget,
-): number => {
-  const numberValue = asFiniteNumber(value, path, target);
-  if (numberValue < 0) {
-    return fail(target, path, "expected a non-negative number");
-  }
-
-  return numberValue;
-};
-
-const asInteger = (
-  value: unknown,
-  path: string,
-  target: ValidationTarget,
-): number => {
-  const numberValue = asFiniteNumber(value, path, target);
-  if (!Number.isInteger(numberValue)) {
-    return fail(target, path, "expected an integer");
-  }
-
-  return numberValue;
-};
-
-const asNonNegativeInteger = (
-  value: unknown,
-  path: string,
-  target: ValidationTarget,
-): number => {
-  const numberValue = asInteger(value, path, target);
-  if (numberValue < 0) {
-    return fail(target, path, "expected a non-negative integer");
-  }
-
-  return numberValue;
-};
-
-const asEnumValue = <T extends string>(
-  value: unknown,
-  allowed: readonly T[],
-  path: string,
-  target: ValidationTarget,
-): T => {
-  if (typeof value !== "string" || !allowed.includes(value as T)) {
-    return fail(target, path, `expected one of: ${allowed.join(", ")}`);
-  }
-
-  return value as T;
-};
-
-const assertExactKeys = (
-  record: UnknownRecord,
-  allowedKeys: readonly string[],
-  path: string,
-): void => {
-  const unexpectedKey = Object.keys(record).find((key) => !allowedKeys.includes(key));
-  if (unexpectedKey) {
-    fail("request", `${path}.${unexpectedKey}`, "unknown field");
-  }
-};
+const {
+  fail,
+  asRecord,
+  asArray,
+  asString,
+  asFiniteNumber,
+  asNonNegativeNumber,
+  asPositiveNumber,
+  asInteger,
+  asNonNegativeInteger,
+  asEnumValue,
+  asNullable,
+  assertExactKeys,
+  assertArrayLength,
+} = createPrimitiveValidators(failBoundaryValidation);
 
 const parsePointResponse = (value: unknown, path: string): PointResponse => {
   const point = asRecord(value, path, "response");
@@ -180,19 +96,21 @@ const parsePolygonResponse = (
   expectedPointCount?: number,
 ): PolygonResponse => {
   const polygon = asRecord(value, path, "response");
-  const points = asArray(polygon.points, `${path}.points`, "response").map((point, index) =>
-    parsePointResponse(point, `${path}.points[${index}]`),
-  );
+  const pointValues = asArray(polygon.points, `${path}.points`, "response");
 
-  if (expectedPointCount !== undefined && points.length !== expectedPointCount) {
-    fail("response", `${path}.points`, `expected exactly ${expectedPointCount} points`);
+  if (expectedPointCount === undefined) {
+    assertArrayLength(pointValues, `${path}.points`, "response", { min: 3 });
+  } else {
+    assertArrayLength(pointValues, `${path}.points`, "response", {
+      exact: expectedPointCount,
+    });
   }
 
-  if (expectedPointCount === undefined && points.length < 3) {
-    fail("response", `${path}.points`, "expected at least 3 points");
-  }
-
-  return { points };
+  return {
+    points: pointValues.map((point, index) =>
+      parsePointResponse(point, `${path}.points[${index}]`),
+    ),
+  };
 };
 
 const parseEdgeSetbackResponse = (
@@ -200,11 +118,19 @@ const parseEdgeSetbackResponse = (
   path: string,
 ): EdgeSetbackResponse => {
   const setback = asRecord(value, path, "response");
-  const roadTypeValue = setback.road_type;
 
   return {
-    edge_index: asNonNegativeInteger(setback.edge_index, `${path}.edge_index`, "response"),
-    side: asEnumValue(setback.side, BOUNDARY_SIDES, `${path}.side`, "response"),
+    edge_index: asNonNegativeInteger(
+      setback.edge_index,
+      `${path}.edge_index`,
+      "response",
+    ),
+    side: asEnumValue(
+      setback.side,
+      BOUNDARY_SIDES,
+      `${path}.side`,
+      "response",
+    ),
     base_setback: asNonNegativeNumber(
       setback.base_setback,
       `${path}.base_setback`,
@@ -220,10 +146,9 @@ const parseEdgeSetbackResponse = (
       `${path}.final_setback`,
       "response",
     ),
-    road_type:
-      roadTypeValue === null
-        ? null
-        : asEnumValue(roadTypeValue, ROAD_TYPES, `${path}.road_type`, "response"),
+    road_type: asNullable(setback.road_type, (roadType) =>
+      asEnumValue(roadType, ROAD_TYPES, `${path}.road_type`, "response"),
+    ),
   };
 };
 
@@ -231,51 +156,69 @@ export function assertBuildableSpaceRequest(
   value: unknown,
 ): asserts value is BuildableSpaceRequest {
   const request = asRecord(value, "request", "request");
-  assertExactKeys(request, ["land_boundary", "roads"], "request");
+  assertExactKeys(
+    request,
+    ["land_boundary", "roads"],
+    "request",
+    "request",
+  );
 
   const landBoundary = asRecord(
     request.land_boundary,
     "request.land_boundary",
     "request",
   );
-  assertExactKeys(landBoundary, ["points"], "request.land_boundary");
+  assertExactKeys(
+    landBoundary,
+    ["points"],
+    "request.land_boundary",
+    "request",
+  );
 
   const points = asArray(
     landBoundary.points,
     "request.land_boundary.points",
     "request",
   );
-
-  if (points.length < 4 || points.length > 50) {
-    fail("request", "request.land_boundary.points", "expected 4 to 50 points");
-  }
+  assertArrayLength(points, "request.land_boundary.points", "request", {
+    min: 4,
+    max: 50,
+  });
 
   points.forEach((valueAtIndex, index) => {
     const path = `request.land_boundary.points[${index}]`;
     const point = asRecord(valueAtIndex, path, "request");
-    assertExactKeys(point, ["x", "y"], path);
+    assertExactKeys(point, ["x", "y"], path, "request");
 
     const x = asInteger(point.x, `${path}.x`, "request");
     const y = asInteger(point.y, `${path}.y`, "request");
 
     if (Math.abs(x) > 100_000) {
-      fail("request", `${path}.x`, "absolute value must not exceed 100000");
+      fail(
+        "request",
+        `${path}.x`,
+        "absolute value must not exceed 100000",
+      );
     }
+
     if (Math.abs(y) > 100_000) {
-      fail("request", `${path}.y`, "absolute value must not exceed 100000");
+      fail(
+        "request",
+        `${path}.y`,
+        "absolute value must not exceed 100000",
+      );
     }
   });
 
   const roads = asArray(request.roads, "request.roads", "request");
-  if (roads.length !== 1) {
-    fail("request", "request.roads", "expected exactly one road attachment");
-  }
+  assertArrayLength(roads, "request.roads", "request", { exact: 1 });
 
   const road = asRecord(roads[0], "request.roads[0]", "request");
   assertExactKeys(
     road,
     ["boundary_edge_index", "role", "road_type"],
     "request.roads[0]",
+    "request",
   );
 
   const edgeIndex = asNonNegativeInteger(
@@ -283,6 +226,7 @@ export function assertBuildableSpaceRequest(
     "request.roads[0].boundary_edge_index",
     "request",
   );
+
   if (edgeIndex >= points.length) {
     fail(
       "request",
@@ -295,7 +239,12 @@ export function assertBuildableSpaceRequest(
     fail("request", "request.roads[0].role", "expected main_entry");
   }
 
-  asEnumValue(road.road_type, ROAD_TYPES, "request.roads[0].road_type", "request");
+  asEnumValue(
+    road.road_type,
+    ROAD_TYPES,
+    "request.roads[0].road_type",
+    "request",
+  );
 }
 
 export const parseBuildableSpaceResponse = (
@@ -319,23 +268,14 @@ export const parseBuildableSpaceResponse = (
     "response",
   );
 
-  const projectUnitsPerMeter = asFiniteNumber(
-    units.project_units_per_meter,
-    "response.units.project_units_per_meter",
-    "response",
-  );
-  if (projectUnitsPerMeter <= 0) {
-    fail(
-      "response",
-      "response.units.project_units_per_meter",
-      "expected a positive number",
-    );
-  }
-
   return {
     flow_id: asString(response.flow_id, "response.flow_id", "response"),
     units: {
-      project_units_per_meter: projectUnitsPerMeter,
+      project_units_per_meter: asPositiveNumber(
+        units.project_units_per_meter,
+        "response.units.project_units_per_meter",
+        "response",
+      ),
     },
     original_land: {
       area: asNonNegativeNumber(
@@ -410,18 +350,35 @@ export const parseBuildableSpaceErrorResponse = (
   value: unknown,
 ): BuildableSpaceErrorResponse => {
   const response = asRecord(value, "error_response", "response");
-  const details = asRecord(response.details, "error_response.details", "response");
+  const details = asRecord(
+    response.details,
+    "error_response.details",
+    "response",
+  );
 
   return {
-    flow_id: asString(response.flow_id, "error_response.flow_id", "response"),
+    flow_id: asString(
+      response.flow_id,
+      "error_response.flow_id",
+      "response",
+    ),
     stage: asEnumValue(
       response.stage,
       ERROR_STAGES,
       "error_response.stage",
       "response",
     ),
-    code: asEnumValue(response.code, ERROR_CODES, "error_response.code", "response"),
-    message: asString(response.message, "error_response.message", "response"),
+    code: asEnumValue(
+      response.code,
+      ERROR_CODES,
+      "error_response.code",
+      "response",
+    ),
+    message: asString(
+      response.message,
+      "error_response.message",
+      "response",
+    ),
     details,
   };
 };
