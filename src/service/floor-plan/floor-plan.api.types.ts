@@ -26,6 +26,31 @@ export interface GenerationRoomRequest {
   required?: boolean;
 }
 
+export interface RoomSizeConstraint {
+  room_type: RoomType;
+  size: string;
+  min_width: number;
+  max_width: number;
+  min_area: number;
+  max_area: number;
+}
+
+export interface RoomSizeConstraintsResponse {
+  room_size_constraints: RoomSizeConstraint[];
+}
+
+export const GENERATION_CANCELLATION_STATUSES = [
+  "cancellation_requested",
+  "already_requested",
+] as const;
+export type GenerationCancellationStatus =
+  (typeof GENERATION_CANCELLATION_STATUSES)[number];
+
+export interface GenerationCancellationResponse {
+  job_id: string;
+  status: GenerationCancellationStatus;
+}
+
 export interface GenerationRequest {
   floor_limits: FloorLimitsRequest;
   aspect_ratio: number | string;
@@ -242,6 +267,7 @@ export const GENERATION_EVENT_NAMES = [
   "progress",
   "floor_plan",
   "completed",
+  "cancelled",
   "error",
 ] as const;
 export type GenerationEventName = (typeof GENERATION_EVENT_NAMES)[number];
@@ -311,6 +337,10 @@ export interface CompletedPayload {
   elapsed_ms: number;
 }
 
+export interface CancelledPayload {
+  reason: string;
+}
+
 export interface StreamErrorPayload {
   stage: string;
   code: string;
@@ -353,6 +383,10 @@ export type CompletedEvent = GenerationEventEnvelope<
   "completed",
   CompletedPayload
 >;
+export type CancelledEvent = GenerationEventEnvelope<
+  "cancelled",
+  CancelledPayload
+>;
 export type GenerationErrorEvent = GenerationEventEnvelope<
   "error",
   StreamErrorPayload
@@ -364,6 +398,7 @@ export type GenerationSseEvent =
   | ProgressEvent
   | FloorPlanEvent
   | CompletedEvent
+  | CancelledEvent
   | GenerationErrorEvent;
 
 /** Backward-compatible alias. */

@@ -3,6 +3,7 @@ import type { ValidationFailure } from "../validation";
 import { FloorPlanServiceError } from "./floor-plan.errors";
 import {
   COMPLETION_OUTCOMES,
+  GENERATION_CANCELLATION_STATUSES,
   FLOOR_PLAN_CLASSIFICATIONS,
   GENERATION_EVENT_NAMES,
   GENERATION_STATUSES,
@@ -10,6 +11,7 @@ import {
   OPENING_TYPES,
   ROOM_ROLES,
   ROOM_TYPES,
+  type CancelledPayload,
   type CandidateHint,
   type CandidateTrialPayload,
   type CompletedPayload,
@@ -17,6 +19,7 @@ import {
   type FloorPlanOpening,
   type FloorPlanPayload,
   type FloorPlanRoom,
+  type GenerationCancellationResponse,
   type GenerationEventName,
   type GenerationHttpErrorBody,
   type GenerationRequest,
@@ -24,6 +27,8 @@ import {
   type Point,
   type Polygon,
   type ProgressPayload,
+  type RoomSizeConstraint,
+  type RoomSizeConstraintsResponse,
   type RoomMetadata,
   type StatusPayload,
   type StreamErrorPayload,
@@ -618,6 +623,18 @@ const parseCompletedPayload = (
   };
 };
 
+const parseCancelledPayload = (
+  value: unknown,
+  path: string,
+): CancelledPayload => {
+  const payload = asRecord(value, path, "response");
+  assertExactKeys(payload, ["reason"], path, "response");
+
+  return {
+    reason: asString(payload.reason, `${path}.reason`, "response"),
+  };
+};
+
 const parseStreamErrorPayload = (
   value: unknown,
   path: string,
@@ -762,6 +779,15 @@ const parseEnvelope = (value: unknown): GenerationSseEvent => {
           "SSE completed.payload",
         ),
       };
+    case "cancelled":
+      return {
+        ...base,
+        event,
+        payload: parseCancelledPayload(
+          envelope.payload,
+          "SSE cancelled.payload",
+        ),
+      };
     case "error":
       return {
         ...base,
@@ -815,24 +841,38 @@ export const parseGenerationStreamEvent = (
     });
   }
 
-  if (wireId === null || !/^\d+$/.test(wireId)) {
-    throw new FloorPlanServiceError({
-      kind: "sse_protocol",
-      message: "The floor-plan SSE frame is missing a decimal id field.",
-      jobId: event.job_id,
-      eventName: event.event,
-      rawData,
-    });
-  }
+  if (wireId === null || wireId.length === 0) {
+    // The cancellation API documentation shows the terminal cancelled frame
+    // without an SSE id line. Its envelope sequence remains authoritative.
+    if (event.event !== "cancelled") {
+      throw new FloorPlanServiceError({
+        kind: "sse_protocol",
+        message: "The floor-plan SSE frame is missing a decimal id field.",
+        jobId: event.job_id,
+        eventName: event.event,
+        rawData,
+      });
+    }
+  } else {
+    if (!/^\d+$/.test(wireId)) {
+      throw new FloorPlanServiceError({
+        kind: "sse_protocol",
+        message: "The floor-plan SSE id field is not decimal.",
+        jobId: event.job_id,
+        eventName: event.event,
+        rawData,
+      });
+    }
 
-  if (Number(wireId) !== event.sequence) {
-    throw new FloorPlanServiceError({
-      kind: "sse_protocol",
-      message: `SSE id ${wireId} does not match envelope sequence ${event.sequence}.`,
-      jobId: event.job_id,
-      eventName: event.event,
-      rawData,
-    });
+    if (Number(wireId) !== event.sequence) {
+      throw new FloorPlanServiceError({
+        kind: "sse_protocol",
+        message: `SSE id ${wireId} does not match envelope sequence ${event.sequence}.`,
+        jobId: event.job_id,
+        eventName: event.event,
+        rawData,
+      });
+    }
   }
 
   if (expectedJobId !== null && event.job_id !== expectedJobId) {
@@ -850,6 +890,151 @@ export const parseGenerationStreamEvent = (
   }
 
   return event;
+};
+
+const parseRoomSizeConstraint = (
+  value: unknown,
+  path: string,
+): RoomSizeConstraint => {
+  const constraint = asRecord(value, path, "response");
+  assertExactKeys(
+    constraint,
+    ["room_type", "size", "min_width", "max_width", "min_area", "max_area"],
+    path,
+    "response",
+  );
+
+  const size = asString(constraint.size, `${path}.size`, "response").trim();
+  if (size.length === 0) {
+    failFloorPlanValidation("response", `${path}.size`, "expected a non-empty string");
+  }
+
+  const minWidth = asPositiveNumber(
+    constraint.min_width,
+    `${path}.min_width`,
+    "response",
+  );
+  const maxWidth = asPositiveNumber(
+    constraint.max_width,
+    `${path}.max_width`,
+    "response",
+  );
+  const minArea = asPositiveNumber(
+    constraint.min_area,
+    `${path}.min_area`,
+    "response",
+  );
+  const maxArea = asPositiveNumber(
+    constraint.max_area,
+    `${path}.max_area`,
+    "response",
+  );
+
+  if (minWidth > maxWidth) {
+    failFloorPlanValidation(
+      "response",
+      path,
+      "min_width cannot exceed max_width",
+    );
+  }
+  if (minArea > maxArea) {
+    failFloorPlanValidation(
+      "response",
+      path,
+      "min_area cannot exceed max_area",
+    );
+  }
+
+  return {
+    room_type: asEnumValue(
+      constraint.room_type,
+      ROOM_TYPES,
+      `${path}.room_type`,
+      "response",
+    ),
+    size,
+    min_width: minWidth,
+    max_width: maxWidth,
+    min_area: minArea,
+    max_area: maxArea,
+  };
+};
+
+export const parseRoomSizeConstraintsResponse = (
+  value: unknown,
+): RoomSizeConstraintsResponse => {
+  const response = asRecord(value, "room-size constraints response", "response");
+  assertExactKeys(
+    response,
+    ["room_size_constraints"],
+    "room-size constraints response",
+    "response",
+  );
+
+  const values = asArray(
+    response.room_size_constraints,
+    "room-size constraints response.room_size_constraints",
+    "response",
+  );
+  assertArrayLength(
+    values,
+    "room-size constraints response.room_size_constraints",
+    "response",
+    { min: 1 },
+  );
+
+  const constraints = values.map((item, index) =>
+    parseRoomSizeConstraint(
+      item,
+      `room-size constraints response.room_size_constraints[${index}]`,
+    ),
+  );
+  const keys = new Set<string>();
+  constraints.forEach((constraint, index) => {
+    const key = `${constraint.room_type}:${constraint.size}`;
+    if (keys.has(key)) {
+      failFloorPlanValidation(
+        "response",
+        `room-size constraints response.room_size_constraints[${index}]`,
+        `duplicate room-type and size combination: ${key}`,
+      );
+    }
+    keys.add(key);
+  });
+
+  return { room_size_constraints: constraints };
+};
+
+export const parseGenerationCancellationResponse = (
+  value: unknown,
+  expectedJobId?: string,
+): GenerationCancellationResponse => {
+  const response = asRecord(value, "cancellation response", "response");
+  assertExactKeys(
+    response,
+    ["job_id", "status"],
+    "cancellation response",
+    "response",
+  );
+
+  const jobId = parseJobId(response.job_id, "cancellation response.job_id");
+  if (expectedJobId !== undefined && jobId !== expectedJobId) {
+    failFloorPlanValidation(
+      "response",
+      "cancellation response.job_id",
+      "does not match the requested job ID",
+    );
+  }
+
+  return {
+    job_id: jobId,
+    status: asEnumValue(
+      response.status,
+      GENERATION_CANCELLATION_STATUSES,
+      "cancellation response.status",
+      "response",
+    ),
+  };
 };
 
 export const readGenerationHttpErrorBody = async (

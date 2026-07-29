@@ -33,7 +33,7 @@ const Home: React.FC = () => {
 
         <div className="flex flex-col sm:flex-row gap-4 justify-center items-center w-full">
           <Link
-            to="/canvas"
+            to="/workspace"
             className="group relative inline-flex items-center justify-center gap-2 px-8 py-4 text-base font-semibold text-white transition-all duration-200 bg-indigo-600 border border-transparent rounded-full hover:bg-indigo-700 hover:shadow-lg hover:shadow-indigo-500/30 focus:outline-none focus:ring-2 focus:ring-offset-2 focus:ring-indigo-600 w-full sm:w-auto"
           >
             <span>Open Workspace</span>

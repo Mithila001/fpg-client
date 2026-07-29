@@ -74,6 +74,26 @@ export const validateBoundary = (
   }
 
   for (let index = 0; index < points.length; index += 1) {
+    const point = points[index];
+    if (!Number.isInteger(point.x) || !Number.isInteger(point.y)) {
+      issues.push({
+        code: "coordinate_not_integer",
+        vertexIndex: index,
+        message: `Vertex ${index + 1} must use whole project-unit coordinates.`,
+      });
+      break;
+    }
+    if (Math.abs(point.x) > 100_000 || Math.abs(point.y) > 100_000) {
+      issues.push({
+        code: "coordinate_out_of_range",
+        vertexIndex: index,
+        message: `Vertex ${index + 1} exceeds the maximum coordinate range.`,
+      });
+      break;
+    }
+  }
+
+  for (let index = 0; index < points.length; index += 1) {
     const nextIndex = (index + 1) % points.length;
     if (distance(points[index], points[nextIndex]) < config.minimumEdgeLength) {
       issues.push({

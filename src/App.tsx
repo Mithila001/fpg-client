@@ -1,7 +1,7 @@
-import { BrowserRouter, Route, Routes } from "react-router-dom";
+import { BrowserRouter, Navigate, Route, Routes } from "react-router-dom";
 import Layout from "./components/Layout";
-import Canvas from "./pages/Canvas";
 import Home from "./pages/Home";
+import FloorPlanWorkspacePage from "./pages/FloorPlanWorkspacePage";
 import ApiTestPage from "./pages/dev/ApiTestPage";
 import FloorPlanEditorTestPage from "./pages/dev/FloorPlanEditorTestPage";
 
@@ -11,7 +11,9 @@ function App() {
       <Routes>
         <Route path="/" element={<Layout />}>
           <Route index element={<Home />} />
-          <Route path="canvas" element={<Canvas />} />
+          <Route path="workspace" element={<FloorPlanWorkspacePage />} />
+          <Route path="canvas" element={<Navigate to="/workspace" replace />} />
+          <Route path="workspace-v2" element={<Navigate to="/workspace" replace />} />
           <Route path="api-test" element={<ApiTestPage />} />
           <Route path="editor-test" element={<FloorPlanEditorTestPage />} />
         </Route>

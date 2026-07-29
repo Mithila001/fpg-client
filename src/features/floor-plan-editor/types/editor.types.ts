@@ -6,6 +6,8 @@ export type BoundaryIssueCode =
   | "too_few_vertices"
   | "too_many_vertices"
   | "edge_too_short"
+  | "coordinate_not_integer"
+  | "coordinate_out_of_range"
   | "self_intersection"
   | "not_convex"
   | "zero_area";
@@ -34,4 +36,3 @@ export interface FloorPlanEditorProps {
   readOnly?: boolean;
   className?: string;
 }
-

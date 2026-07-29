@@ -28,6 +28,8 @@ export const FloorPlanCanvas = ({
     fitKey,
   );
   const locked = interaction === "locked";
+  const heightClassName =
+    className.length > 0 ? className : "h-[560px] min-h-[420px]";
 
   const pointerInWorld = (): Point | null => {
     const pointer = stageRef.current?.getPointerPosition();
@@ -59,7 +61,7 @@ export const FloorPlanCanvas = ({
   return (
     <div
       ref={ref}
-      className={`relative h-[560px] min-h-[420px] w-full overflow-hidden rounded-xl border border-slate-200 bg-white ${className}`}
+      className={`relative w-full overflow-hidden bg-white ${heightClassName}`}
     >
       <div
         className="h-full w-full transition-[filter,transform] duration-200"
@@ -105,7 +107,6 @@ export const FloorPlanCanvas = ({
               />
             </Layer>
           )}
-
           {children({ scale: viewport.scale, viewport, size })}
         </Stage>
       </div>
@@ -139,12 +140,6 @@ export const FloorPlanCanvas = ({
           >
             Fit
           </button>
-        </div>
-      )}
-
-      {!locked && (
-        <div className="absolute bottom-3 left-3 rounded-lg border border-slate-200 bg-white/90 px-3 py-2 text-xs text-slate-600 shadow-sm backdrop-blur">
-          Grid: 0.1 m · Wheel to zoom · Drag canvas to pan
         </div>
       )}
 

@@ -1,4 +1,6 @@
 import type {
+  CancelledEvent,
+  CancelledPayload,
   CandidateHint,
   CandidateTrialEvent,
   CandidateTrialPayload,
@@ -14,6 +16,7 @@ import type {
   FloorPlanPayload,
   FloorPlanRoom,
   FloorPlanScoring,
+  GenerationCancellationResult,
   GenerationErrorEvent,
   GenerationResponse,
   GenerationRoom,
@@ -23,6 +26,8 @@ import type {
   Polygon,
   ProgressEvent,
   ProgressPayload,
+  RoomSizeConstraint,
+  RoomSizeConstraintsResult,
   RoomMetadata,
   ScoreFinding,
   ScoreMetric,
@@ -32,6 +37,8 @@ import type {
   StreamErrorPayload,
 } from "../../types";
 import type {
+  CancelledEvent as ApiCancelledEvent,
+  CancelledPayload as ApiCancelledPayload,
   CandidateHint as ApiCandidateHint,
   CandidateTrialEvent as ApiCandidateTrialEvent,
   CandidateTrialPayload as ApiCandidateTrialPayload,
@@ -46,6 +53,7 @@ import type {
   FloorPlanPayload as ApiFloorPlanPayload,
   FloorPlanRoom as ApiFloorPlanRoom,
   FloorPlanScoring as ApiFloorPlanScoring,
+  GenerationCancellationResponse as ApiGenerationCancellationResponse,
   GenerationErrorEvent as ApiGenerationErrorEvent,
   GenerationRequest as ApiGenerationRequest,
   GenerationResponse as ApiGenerationResponse,
@@ -56,6 +64,8 @@ import type {
   Polygon as ApiPolygon,
   ProgressEvent as ApiProgressEvent,
   ProgressPayload as ApiProgressPayload,
+  RoomSizeConstraint as ApiRoomSizeConstraint,
+  RoomSizeConstraintsResponse as ApiRoomSizeConstraintsResponse,
   RoomMetadata as ApiRoomMetadata,
   ScoreFinding as ApiScoreFinding,
   ScoreMetric as ApiScoreMetric,
@@ -107,6 +117,30 @@ const fromApiGenerationRoom = (
   name: room.name,
   requestedSize: room.requested_size,
   required: room.required,
+});
+
+const fromApiRoomSizeConstraint = (
+  constraint: ApiRoomSizeConstraint,
+): RoomSizeConstraint => ({
+  roomType: constraint.room_type,
+  size: constraint.size,
+  minWidth: apiLengthToProjectLength(constraint.min_width),
+  maxWidth: apiLengthToProjectLength(constraint.max_width),
+  minArea: apiAreaToProjectArea(constraint.min_area),
+  maxArea: apiAreaToProjectArea(constraint.max_area),
+});
+
+export const fromRoomSizeConstraintsApiResponse = (
+  response: ApiRoomSizeConstraintsResponse,
+): RoomSizeConstraintsResult => ({
+  constraints: response.room_size_constraints.map(fromApiRoomSizeConstraint),
+});
+
+export const fromGenerationCancellationApiResponse = (
+  response: ApiGenerationCancellationResponse,
+): GenerationCancellationResult => ({
+  jobId: response.job_id,
+  status: response.status,
 });
 
 export const toFloorPlanGenerationApiRequest = (
@@ -511,6 +545,18 @@ const fromApiCompletedPayload = (
   elapsedMs: payload.elapsed_ms,
 });
 
+const toApiCancelledPayload = (
+  payload: CancelledPayload,
+): ApiCancelledPayload => ({
+  reason: payload.reason,
+});
+
+const fromApiCancelledPayload = (
+  payload: ApiCancelledPayload,
+): CancelledPayload => ({
+  reason: payload.reason,
+});
+
 const toApiStreamErrorPayload = (
   payload: StreamErrorPayload,
 ): ApiStreamErrorPayload => ({
@@ -583,6 +629,16 @@ export const fromGenerationApiEvent = (
         payload: fromApiCompletedPayload(event.payload),
       } satisfies CompletedEvent;
 
+    case "cancelled":
+      return {
+        schemaVersion: event.schema_version,
+        sequence: event.sequence,
+        timestamp: event.timestamp,
+        jobId: event.job_id,
+        event: event.event,
+        payload: fromApiCancelledPayload(event.payload),
+      } satisfies CancelledEvent;
+
     case "error":
       return {
         schemaVersion: event.schema_version,
@@ -648,6 +704,16 @@ export const toGenerationApiEvent = (
         event: event.event,
         payload: toApiCompletedPayload(event.payload),
       } satisfies ApiCompletedEvent;
+
+    case "cancelled":
+      return {
+        schema_version: event.schemaVersion,
+        sequence: event.sequence,
+        timestamp: event.timestamp,
+        job_id: event.jobId,
+        event: event.event,
+        payload: toApiCancelledPayload(event.payload),
+      } satisfies ApiCancelledEvent;
 
     case "error":
       return {

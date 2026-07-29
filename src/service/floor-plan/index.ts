@@ -3,11 +3,19 @@ export {
   startFloorPlanGeneration,
 } from "./floor-plan.service";
 
+export {
+  GENERATION_STREAM_CANCELLATION_PATH,
+  ROOM_SIZE_CONSTRAINTS_PATH,
+  cancelFloorPlanGeneration,
+  getRoomSizeConstraints,
+} from "./floor-plan.reference.service";
+
 export { FloorPlanServiceError } from "./floor-plan.errors";
 
 export type {
   FloorPlanEventStream,
   FloorPlanGenerationSession,
+  FloorPlanRequestOptions,
   FloorPlanStreamCloseReason,
   FloorPlanStreamHandlers,
   FloorPlanStreamOptions,

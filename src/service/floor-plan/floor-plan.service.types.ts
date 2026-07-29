@@ -6,6 +6,7 @@ import type {
 export type FloorPlanStreamCloseReason =
   | "completed"
   | "generation_error"
+  | "cancelled"
   | "aborted";
 
 export interface FloorPlanStreamHandlers {
@@ -15,11 +16,13 @@ export interface FloorPlanStreamHandlers {
   onError?: (error: Error) => void;
 }
 
-export interface FloorPlanStreamOptions {
+export interface FloorPlanRequestOptions {
   signal?: AbortSignal;
   headers?: HeadersInit;
   fetchImplementation?: typeof fetch;
 }
+
+export type FloorPlanStreamOptions = FloorPlanRequestOptions;
 
 export interface FloorPlanEventStream {
   readonly closed: boolean;

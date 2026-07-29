@@ -29,6 +29,7 @@ src/
         ├── floor-plan.service.types.ts
         ├── floor-plan.validators.ts
         ├── floor-plan.service.ts
+        ├── floor-plan.reference.service.ts
         └── index.ts
 ```
 
@@ -93,8 +94,25 @@ const session = await startFloorPlanGeneration(request, {
 });
 
 const result = await session.completion;
-console.log(result.selectedFloorPlan.floorPlan);
+if (result.status === "completed" && result.selectedFloorPlan) {
+  console.log(result.selectedFloorPlan.floorPlan);
+}
 ```
+
+## Generation reference and cancellation
+
+```ts
+import {
+  cancelFloorPlanGeneration,
+  getRoomSizeConstraints,
+} from "./service/floor-plan";
+
+const { constraints } = await getRoomSizeConstraints();
+const cancellation = await cancelFloorPlanGeneration(session.jobId!);
+```
+
+The stream remains open after the DELETE request. Continue reading until the
+terminal `cancelled`, `completed`, or `error` event is received.
 
 ## Measurement boundary
 

@@ -28,6 +28,11 @@ export interface FloorPlanGenerationDisplay {
   progress?: GenerationProgressDisplay;
 }
 
+export interface FloorPlanWorkspaceControlSlots {
+  landEditorControls: ReactNode;
+  viewerControls: ReactNode;
+}
+
 export type PlanDimensionSide = "outside" | "left" | "right";
 
 export interface PlanDimension {
@@ -52,5 +57,8 @@ export interface FloorPlanWorkspaceProps extends FloorPlanEditorProps {
   noResultMessage?: string;
   showGrid?: boolean;
   canvasClassName?: string;
+  renderSidePanel?: (
+    slots: FloorPlanWorkspaceControlSlots,
+  ) => ReactNode;
   footer?: ReactNode;
 }

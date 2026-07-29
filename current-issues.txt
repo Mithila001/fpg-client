@@ -1,0 +1,3 @@
+# Client cannot properly Connect with SSE (doest not know if this server issue or Client Issue)
+# The Error Handling is Poor
+# Client Needed to Update the Auto Validation Feature of Room Configuration

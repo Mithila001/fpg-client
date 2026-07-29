@@ -3,8 +3,8 @@ import type { EditorConfig } from "./editor-state";
 
 export const DEFAULT_EDITOR_CONFIG: EditorConfig = {
   minVertices: 4,
-  maxVertices: 6,
-  minimumEdgeLength: 2.4,
+  maxVertices: 50,
+  minimumEdgeLength: 1,
   gridStep: 1,
   roadSnapDistance: 6,
   roadWidth: 20,

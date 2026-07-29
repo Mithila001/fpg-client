@@ -28,6 +28,31 @@ export interface GenerationRoom {
   required?: boolean;
 }
 
+export interface RoomSizeConstraint {
+  roomType: RoomType;
+  size: string;
+  minWidth: ProjectLength;
+  maxWidth: ProjectLength;
+  minArea: ProjectArea;
+  maxArea: ProjectArea;
+}
+
+export interface RoomSizeConstraintsResult {
+  constraints: RoomSizeConstraint[];
+}
+
+export const GENERATION_CANCELLATION_STATUSES = [
+  "cancellation_requested",
+  "already_requested",
+] as const;
+export type GenerationCancellationStatus =
+  (typeof GENERATION_CANCELLATION_STATUSES)[number];
+
+export interface GenerationCancellationResult {
+  jobId: string;
+  status: GenerationCancellationStatus;
+}
+
 export interface FloorPlanGenerationRequest {
   floorLimits: FloorLimits;
   aspectRatio: number | string;
@@ -186,6 +211,7 @@ export const GENERATION_EVENT_NAMES = [
   "progress",
   "floor_plan",
   "completed",
+  "cancelled",
   "error",
 ] as const;
 export type GenerationEventName = (typeof GENERATION_EVENT_NAMES)[number];
@@ -252,6 +278,10 @@ export interface CompletedPayload {
   elapsedMs: number;
 }
 
+export interface CancelledPayload {
+  reason: string;
+}
+
 export interface StreamErrorPayload {
   stage: string;
   code: string;
@@ -285,6 +315,10 @@ export type CompletedEvent = GenerationEventEnvelope<
   "completed",
   CompletedPayload
 >;
+export type CancelledEvent = GenerationEventEnvelope<
+  "cancelled",
+  CancelledPayload
+>;
 export type GenerationErrorEvent = GenerationEventEnvelope<
   "error",
   StreamErrorPayload
@@ -296,11 +330,23 @@ export type GenerationSseEvent =
   | ProgressEvent
   | FloorPlanEvent
   | CompletedEvent
+  | CancelledEvent
   | GenerationErrorEvent;
 
-export interface FloorPlanGenerationResult {
+export interface CompletedFloorPlanGenerationResult {
+  status: "completed";
   jobId: string;
   completedEvent: CompletedEvent;
-  selectedFloorPlanEvent: FloorPlanEvent;
-  selectedFloorPlan: FloorPlanPayload;
+  selectedFloorPlanEvent: FloorPlanEvent | null;
+  selectedFloorPlan: FloorPlanPayload | null;
 }
+
+export interface CancelledFloorPlanGenerationResult {
+  status: "cancelled";
+  jobId: string;
+  cancelledEvent: CancelledEvent;
+}
+
+export type FloorPlanGenerationResult =
+  | CompletedFloorPlanGenerationResult
+  | CancelledFloorPlanGenerationResult;

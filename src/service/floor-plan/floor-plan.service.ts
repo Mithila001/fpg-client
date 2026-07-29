@@ -1,4 +1,5 @@
 import type {
+  CancelledEvent,
   CompletedEvent,
   FloorPlanEvent,
   FloorPlanGenerationRequest,
@@ -251,6 +252,17 @@ export const startFloorPlanGeneration = async (
   }
 
   resolvedJobId = response.headers.get("X-Generation-Job-ID");
+  if (resolvedJobId === null || resolvedJobId.trim().length === 0) {
+    options.signal?.removeEventListener("abort", forwardExternalAbort);
+    closed = true;
+    controller.abort("Generation job ID header was not returned.");
+    throw new FloorPlanServiceError({
+      kind: "invalid_response",
+      message:
+        "The floor-plan stream response did not expose X-Generation-Job-ID.",
+      status: response.status,
+    });
+  }
   handlers.onOpen?.(resolvedJobId);
 
   const responseBody = response.body;
@@ -259,11 +271,16 @@ export const startFloorPlanGeneration = async (
     const floorPlans = new Map<number, FloorPlanEvent>();
     let lastSequence = 0;
     let completedEvent: CompletedEvent | null = null;
+    let cancelledEvent: CancelledEvent | null = null;
     let generationError: FloorPlanServiceError | null = null;
 
     try {
       await consumeSseStream(responseBody, async (frame) => {
-        if (completedEvent !== null || generationError !== null) {
+        if (
+          completedEvent !== null ||
+          cancelledEvent !== null ||
+          generationError !== null
+        ) {
           throw new FloorPlanServiceError({
             kind: "sse_protocol",
             message: "The server emitted an event after a terminal SSE event.",
@@ -312,6 +329,11 @@ export const startFloorPlanGeneration = async (
 
         if (event.event === "completed") {
           completedEvent = event;
+          return;
+        }
+
+        if (event.event === "cancelled") {
+          cancelledEvent = event;
         }
       });
 
@@ -327,16 +349,26 @@ export const startFloorPlanGeneration = async (
       const terminalGenerationError =
         generationError as FloorPlanServiceError | null;
       const terminalCompletedEvent = completedEvent as CompletedEvent | null;
+      const terminalCancelledEvent = cancelledEvent as CancelledEvent | null;
 
       if (terminalGenerationError !== null) {
         throw terminalGenerationError;
+      }
+
+      if (terminalCancelledEvent !== null) {
+        notifyClose("cancelled");
+        return {
+          status: "cancelled",
+          jobId: terminalCancelledEvent.jobId,
+          cancelledEvent: terminalCancelledEvent,
+        };
       }
 
       if (terminalCompletedEvent === null) {
         throw new FloorPlanServiceError({
           kind: "stream_interrupted",
           message:
-            "The floor-plan SSE connection ended without a completed or error event.",
+            "The floor-plan SSE connection ended without a completed, cancelled, or error event.",
           jobId: resolvedJobId ?? undefined,
         });
       }
@@ -344,13 +376,13 @@ export const startFloorPlanGeneration = async (
       const finalSequence =
         terminalCompletedEvent.payload.finalFloorPlanSequence;
       const selectedFloorPlanEvent =
-        finalSequence === null ? undefined : floorPlans.get(finalSequence);
+        finalSequence === null ? null : (floorPlans.get(finalSequence) ?? null);
 
-      if (selectedFloorPlanEvent === undefined) {
+      if (finalSequence !== null && selectedFloorPlanEvent === null) {
         throw new FloorPlanServiceError({
           kind: "stream_interrupted",
           message:
-            "The completed event did not reference a floor-plan event received by this client.",
+            "The completed event referenced a floor-plan event not received by this client.",
           jobId: terminalCompletedEvent.jobId,
           eventName: terminalCompletedEvent.event,
           details: {
@@ -363,10 +395,11 @@ export const startFloorPlanGeneration = async (
       notifyClose("completed");
 
       return {
+        status: "completed",
         jobId: terminalCompletedEvent.jobId,
         completedEvent: terminalCompletedEvent,
         selectedFloorPlanEvent,
-        selectedFloorPlan: selectedFloorPlanEvent.payload,
+        selectedFloorPlan: selectedFloorPlanEvent?.payload ?? null,
       };
     } catch (error: unknown) {
       const serviceError = toFloorPlanServiceError(error, resolvedJobId);

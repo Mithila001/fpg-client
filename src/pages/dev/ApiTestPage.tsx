@@ -28,6 +28,7 @@ import {
 } from "../../service/measurement";
 import type {
   BuildableSpaceRequest,
+  CancelledEvent,
   BuildableSpaceResult,
   CompletedEvent,
   DisplayAreaUnit,
@@ -236,6 +237,7 @@ type StreamState =
   | "opening"
   | "open"
   | "completed"
+  | "cancelled"
   | "generation_error"
   | "aborted"
   | "error";
@@ -465,7 +467,7 @@ const ApiTestPage = () => {
   const [selectedFloorPlan, setSelectedFloorPlan] =
     useState<FloorPlanPayload | null>(null);
   const [terminalEvent, setTerminalEvent] = useState<
-    CompletedEvent | GenerationErrorEvent | null
+    CompletedEvent | CancelledEvent | GenerationErrorEvent | null
   >(null);
   const [floorPlanError, setFloorPlanError] =
     useState<Record<string, unknown> | null>(null);
@@ -554,6 +556,9 @@ const ApiTestPage = () => {
               setLatestFloorPlan(event.payload);
             } else if (event.event === "completed") {
               setTerminalEvent(event);
+            } else if (event.event === "cancelled") {
+              setTerminalEvent(event);
+              setStreamState("cancelled");
             } else if (event.event === "error") {
               setTerminalEvent(event);
               setStreamState("generation_error");
@@ -607,6 +612,13 @@ const ApiTestPage = () => {
           }
 
           setJobId(result.jobId);
+          if (result.status === "cancelled") {
+            setSelectedFloorPlan(null);
+            setTerminalEvent(result.cancelledEvent);
+            setStreamState("cancelled");
+            return;
+          }
+
           setSelectedFloorPlan(result.selectedFloorPlan);
           setTerminalEvent(result.completedEvent);
           setStreamState("completed");
