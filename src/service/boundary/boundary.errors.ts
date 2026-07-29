@@ -1,8 +1,3 @@
-import type {
-  BuildableSpaceErrorCode,
-  BuildableSpaceErrorStage,
-} from "./boundary.api.types";
-
 export type BoundaryServiceErrorKind =
   | "invalid_request"
   | "transport"
@@ -15,9 +10,9 @@ export interface BoundaryServiceErrorOptions {
   message: string;
   status?: number;
   flowId?: string;
-  code?: BuildableSpaceErrorCode;
-  stage?: BuildableSpaceErrorStage;
-  details?: Record<string, unknown>;
+  code?: string;
+  stage?: string;
+  details?: unknown;
   cause?: unknown;
 }
 
@@ -25,9 +20,9 @@ export class BoundaryServiceError extends Error {
   readonly kind: BoundaryServiceErrorKind;
   readonly status?: number;
   readonly flowId?: string;
-  readonly code?: BuildableSpaceErrorCode;
-  readonly stage?: BuildableSpaceErrorStage;
-  readonly details?: Record<string, unknown>;
+  readonly code?: string;
+  readonly stage?: string;
+  readonly details?: unknown;
   readonly originalCause?: unknown;
 
   constructor(options: BoundaryServiceErrorOptions) {

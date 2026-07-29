@@ -1,5 +1,6 @@
 import { createPrimitiveValidators } from "../validation";
 import type { ValidationFailure } from "../validation";
+import { extractApiFailure, readResponseBody } from "../http";
 import { FloorPlanServiceError } from "./floor-plan.errors";
 import {
   COMPLETION_OUTCOMES,
@@ -27,8 +28,6 @@ import {
   type Point,
   type Polygon,
   type ProgressPayload,
-  type RoomSizeConstraint,
-  type RoomSizeConstraintsResponse,
   type RoomMetadata,
   type StatusPayload,
   type StreamErrorPayload,
@@ -156,12 +155,7 @@ const parseFloorPlanRoom = (value: unknown, path: string): FloorPlanRoom => {
 
   return {
     id: asString(room.id, `${path}.id`, "response"),
-    room_type: asEnumValue(
-      room.room_type,
-      ROOM_TYPES,
-      `${path}.room_type`,
-      "response",
-    ),
+    room_type: asString(room.room_type, `${path}.room_type`, "response"),
     name: asString(room.name, `${path}.name`, "response"),
     boundary: parsePolygon(room.boundary, `${path}.boundary`),
     role: asEnumValue(room.role, ROOM_ROLES, `${path}.role`, "response"),
@@ -370,7 +364,7 @@ export function assertFloorPlanGenerationRequest(
     const room = asRecord(roomValue, path, "request");
     assertExactKeys(
       room,
-      ["room_type", "id", "name", "requested_size", "required"],
+      ["room_type", "id", "name", "requested_size"],
       path,
       "request",
     );
@@ -413,9 +407,6 @@ export function assertFloorPlanGenerationRequest(
       }
     }
 
-    if (room.required !== undefined) {
-      asBoolean(room.required, `${path}.required`, "request");
-    }
   });
 }
 
@@ -449,12 +440,7 @@ const parseCandidateHint = (value: unknown, path: string): CandidateHint => {
     room_type:
       hint.room_type === null
         ? null
-        : asEnumValue(
-            hint.room_type,
-            ROOM_TYPES,
-            `${path}.room_type`,
-            "response",
-          ),
+        : asString(hint.room_type, `${path}.room_type`, "response"),
     hint_index: asPositiveInteger(
       hint.hint_index,
       `${path}.hint_index`,
@@ -642,7 +628,7 @@ const parseStreamErrorPayload = (
   const payload = asRecord(value, path, "response");
   assertExactKeys(
     payload,
-    ["stage", "code", "message", "recoverable"],
+    ["stage", "code", "message", "details", "recoverable"],
     path,
     "response",
   );
@@ -651,6 +637,7 @@ const parseStreamErrorPayload = (
     stage: asString(payload.stage, `${path}.stage`, "response"),
     code: asString(payload.code, `${path}.code`, "response"),
     message: asString(payload.message, `${path}.message`, "response"),
+    details: asRecord(payload.details, `${path}.details`, "response"),
     recoverable: asBoolean(
       payload.recoverable,
       `${path}.recoverable`,
@@ -892,119 +879,6 @@ export const parseGenerationStreamEvent = (
   return event;
 };
 
-const parseRoomSizeConstraint = (
-  value: unknown,
-  path: string,
-): RoomSizeConstraint => {
-  const constraint = asRecord(value, path, "response");
-  assertExactKeys(
-    constraint,
-    ["room_type", "size", "min_width", "max_width", "min_area", "max_area"],
-    path,
-    "response",
-  );
-
-  const size = asString(constraint.size, `${path}.size`, "response").trim();
-  if (size.length === 0) {
-    failFloorPlanValidation("response", `${path}.size`, "expected a non-empty string");
-  }
-
-  const minWidth = asPositiveNumber(
-    constraint.min_width,
-    `${path}.min_width`,
-    "response",
-  );
-  const maxWidth = asPositiveNumber(
-    constraint.max_width,
-    `${path}.max_width`,
-    "response",
-  );
-  const minArea = asPositiveNumber(
-    constraint.min_area,
-    `${path}.min_area`,
-    "response",
-  );
-  const maxArea = asPositiveNumber(
-    constraint.max_area,
-    `${path}.max_area`,
-    "response",
-  );
-
-  if (minWidth > maxWidth) {
-    failFloorPlanValidation(
-      "response",
-      path,
-      "min_width cannot exceed max_width",
-    );
-  }
-  if (minArea > maxArea) {
-    failFloorPlanValidation(
-      "response",
-      path,
-      "min_area cannot exceed max_area",
-    );
-  }
-
-  return {
-    room_type: asEnumValue(
-      constraint.room_type,
-      ROOM_TYPES,
-      `${path}.room_type`,
-      "response",
-    ),
-    size,
-    min_width: minWidth,
-    max_width: maxWidth,
-    min_area: minArea,
-    max_area: maxArea,
-  };
-};
-
-export const parseRoomSizeConstraintsResponse = (
-  value: unknown,
-): RoomSizeConstraintsResponse => {
-  const response = asRecord(value, "room-size constraints response", "response");
-  assertExactKeys(
-    response,
-    ["room_size_constraints"],
-    "room-size constraints response",
-    "response",
-  );
-
-  const values = asArray(
-    response.room_size_constraints,
-    "room-size constraints response.room_size_constraints",
-    "response",
-  );
-  assertArrayLength(
-    values,
-    "room-size constraints response.room_size_constraints",
-    "response",
-    { min: 1 },
-  );
-
-  const constraints = values.map((item, index) =>
-    parseRoomSizeConstraint(
-      item,
-      `room-size constraints response.room_size_constraints[${index}]`,
-    ),
-  );
-  const keys = new Set<string>();
-  constraints.forEach((constraint, index) => {
-    const key = `${constraint.room_type}:${constraint.size}`;
-    if (keys.has(key)) {
-      failFloorPlanValidation(
-        "response",
-        `room-size constraints response.room_size_constraints[${index}]`,
-        `duplicate room-type and size combination: ${key}`,
-      );
-    }
-    keys.add(key);
-  });
-
-  return { room_size_constraints: constraints };
-};
-
 export const parseGenerationCancellationResponse = (
   value: unknown,
   expectedJobId?: string,
@@ -1039,33 +913,33 @@ export const parseGenerationCancellationResponse = (
 
 export const readGenerationHttpErrorBody = async (
   response: Response,
-): Promise<GenerationHttpErrorBody> => {
-  const contentType = response.headers.get("content-type")?.toLowerCase() ?? "";
-
-  if (contentType.includes("application/json")) {
-    try {
-      return (await response.json()) as GenerationHttpErrorBody;
-    } catch {
-      return null;
-    }
-  }
-
-  try {
-    return await response.text();
-  } catch {
-    return null;
-  }
-};
+): Promise<GenerationHttpErrorBody> =>
+  (await readResponseBody(response)) as GenerationHttpErrorBody;
 
 export interface ExtractedGenerationHttpError {
   message: string | null;
   code?: string;
   stage?: string;
+  details?: Record<string, unknown>;
 }
 
 export const extractGenerationHttpError = (
   body: GenerationHttpErrorBody,
 ): ExtractedGenerationHttpError => {
+  const commonFailure = extractApiFailure(body);
+  if (
+    commonFailure.message !== null ||
+    commonFailure.code !== undefined ||
+    commonFailure.stage !== undefined
+  ) {
+    return {
+      message: commonFailure.message,
+      code: commonFailure.code,
+      stage: commonFailure.stage,
+      details: commonFailure.details,
+    };
+  }
+
   if (typeof body === "string") {
     return {
       message: body.trim().length > 0 ? body : null,

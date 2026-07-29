@@ -5,9 +5,7 @@ export {
 
 export {
   GENERATION_STREAM_CANCELLATION_PATH,
-  ROOM_SIZE_CONSTRAINTS_PATH,
   cancelFloorPlanGeneration,
-  getRoomSizeConstraints,
 } from "./floor-plan.reference.service";
 
 export { FloorPlanServiceError } from "./floor-plan.errors";

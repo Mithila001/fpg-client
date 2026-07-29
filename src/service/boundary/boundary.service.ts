@@ -1,5 +1,5 @@
 import axios from "axios";
-import { httpClient } from "../http";
+import { extractApiFailure, httpClient } from "../http";
 import type { BuildableSpaceRequest, BuildableSpaceResult } from "../../types";
 import { BoundaryServiceError } from "./boundary.errors";
 import {
@@ -8,11 +8,9 @@ import {
 } from "./boundary.mapper";
 import {
   assertBuildableSpaceRequest,
-  parseBuildableSpaceErrorResponse,
   parseBuildableSpaceResponse,
 } from "./boundary.validators";
 import type {
-  BuildableSpaceErrorResponse,
   BuildableSpaceRequest as ApiBuildableSpaceRequest,
   BuildableSpaceResponse as ApiBuildableSpaceResponse,
 } from "./boundary.api.types";
@@ -80,33 +78,6 @@ const parseSuccessResponse = (
   }
 };
 
-const parseErrorResponse = (
-  data: unknown,
-  status: number,
-  headerFlowId: string | undefined,
-): BuildableSpaceErrorResponse => {
-  try {
-    const result = parseBuildableSpaceErrorResponse(data);
-    assertFlowIdConsistency(result.flow_id, headerFlowId);
-    return result;
-  } catch (error: unknown) {
-    if (
-      error instanceof BoundaryServiceError &&
-      error.kind === "invalid_response"
-    ) {
-      throw new BoundaryServiceError({
-        kind: "invalid_response",
-        message: error.message,
-        status,
-        flowId: error.flowId ?? headerFlowId,
-        cause: error,
-      });
-    }
-
-    throw error;
-  }
-};
-
 export const calculateBuildableSpace = async (
   request: BuildableSpaceRequest,
 ): Promise<BuildableSpaceResult> => {
@@ -131,21 +102,19 @@ export const calculateBuildableSpace = async (
       return fromBuildableSpaceApiResponse(apiResponse);
     }
 
-    if (response.status === 422 || response.status === 500) {
-      const apiError = parseErrorResponse(
-        response.data,
-        response.status,
-        headerFlowId,
-      );
+    if (response.status >= 400) {
+      const apiError = extractApiFailure(response.data);
 
       throw new BoundaryServiceError({
         kind: "api_error",
-        message: apiError.message,
+        message:
+          apiError.message ??
+          `Buildable-space request failed with HTTP status ${response.status}.`,
         status: response.status,
-        flowId: apiError.flow_id,
+        flowId: headerFlowId,
         code: apiError.code,
         stage: apiError.stage,
-        details: apiError.details,
+        details: apiError.details ?? apiError.body,
       });
     }
 

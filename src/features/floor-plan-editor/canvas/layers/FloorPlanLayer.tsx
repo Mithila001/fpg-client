@@ -4,7 +4,6 @@ import type {
   FloorPlan,
   FloorPlanOpening,
   FloorPlanRoom,
-  RoomType,
 } from "../../../../types";
 import { polygonCentroid } from "../../engine/geometry/polygon";
 
@@ -14,7 +13,7 @@ interface FloorPlanLayerProps {
   opacity?: number;
 }
 
-const ROOM_COLORS: Record<RoomType, string> = {
+const ROOM_COLORS: Record<string, string> = {
   bedroom: "#eef2ff",
   bathroom: "#ecfdf5",
   attached_bathroom: "#ecfeff",
@@ -40,7 +39,7 @@ const RoomShape = ({ room, scale }: { room: FloorPlanRoom; scale: number }) => {
       <Line
         points={flatten(room.boundary.points)}
         closed
-        fill={ROOM_COLORS[room.roomType]}
+        fill={ROOM_COLORS[room.roomType] ?? "#fafafa"}
         stroke="#475569"
         strokeWidth={2.2 / scale}
         lineJoin="round"

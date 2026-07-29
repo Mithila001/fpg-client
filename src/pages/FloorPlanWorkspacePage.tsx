@@ -1,5 +1,11 @@
 import { useCallback, useEffect, useMemo, useRef, useState } from "react";
 import {
+  FeedbackNotice,
+  FeedbackNoticeStack,
+  type FeedbackNoticeData,
+  type NoticeSeverity,
+} from "../components/FeedbackNotice";
+import {
   createWorkspaceSnapshot,
   FloorPlanWorkspace,
   snapWorkspaceRequestToGrid,
@@ -22,10 +28,10 @@ import {
 import {
   FloorPlanServiceError,
   cancelFloorPlanGeneration,
-  getRoomSizeConstraints,
   startFloorPlanGeneration,
   type FloorPlanGenerationSession,
 } from "../service/floor-plan";
+import { MetadataServiceError, getMetadata } from "../service/metadata";
 import type {
   BuildableSpaceRequest,
   BuildableSpaceResult,
@@ -33,7 +39,7 @@ import type {
   FloorPlan,
   Point,
   RoadType,
-  RoomSizeConstraint,
+  WorkspaceMetadata,
 } from "../types";
 
 const INITIAL_LAND: BuildableSpaceRequest = {
@@ -90,11 +96,26 @@ const errorInfo = (error: unknown): WorkflowErrorInfo => {
     return {
       message: error.message,
       code: error.code,
+      stage: error.stage,
       flowId: error.flowId,
+      details: error.details,
     };
   }
   if (error instanceof FloorPlanServiceError) {
-    return { message: error.message, code: error.code };
+    return {
+      message: error.message,
+      code: error.code,
+      stage: error.stage,
+      details: error.details,
+    };
+  }
+  if (error instanceof MetadataServiceError) {
+    return {
+      message: error.message,
+      code: error.code,
+      stage: error.stage,
+      details: error.details,
+    };
   }
   if (error instanceof Error) return { message: error.message };
   return { message: "An unexpected error occurred." };
@@ -110,14 +131,15 @@ const FloorPlanWorkspacePage = () => {
   const [targetAreaInput, setTargetAreaInput] = useState("48");
   const [buildableResult, setBuildableResult] =
     useState<BuildableSpaceResult | null>(null);
-  const [constraints, setConstraints] = useState<RoomSizeConstraint[]>([]);
-  const [constraintsError, setConstraintsError] = useState<string | null>(null);
+  const [metadata, setMetadata] = useState<WorkspaceMetadata | null>(null);
+  const [metadataError, setMetadataError] =
+    useState<WorkflowErrorInfo | null>(null);
   const [requirements, setRequirements] =
     useState<FloorPlanRequirements | null>(null);
   const [requirementsOpen, setRequirementsOpen] = useState(false);
   const [aspectRatio, setAspectRatio] = useState("1:1");
   const [activity, setActivity] = useState<WorkflowActivity>(
-    "loading-constraints",
+    "loading-metadata",
   );
   const [error, setError] = useState<WorkflowErrorInfo | null>(null);
   const [generationMessage, setGenerationMessage] = useState("");
@@ -137,41 +159,76 @@ const FloorPlanWorkspacePage = () => {
   const [noResult, setNoResult] = useState(false);
   const activeSessionRef = useRef<FloorPlanGenerationSession | null>(null);
   const generationAbortRef = useRef<AbortController | null>(null);
+  const noticeIdRef = useRef(0);
+  const [notices, setNotices] = useState<FeedbackNoticeData[]>([]);
+
+  const addNotice = useCallback(
+    (severity: NoticeSeverity, title: string, message: string) => {
+      noticeIdRef.current += 1;
+      setNotices((current) => [
+        ...current,
+        { id: noticeIdRef.current, severity, title, message },
+      ]);
+    },
+    [],
+  );
 
   const landArea = useMemo(
     () => polygonArea(snapshot.value.landBoundary.points),
     [snapshot.value.landBoundary.points],
   );
 
-  const loadConstraints = useCallback(async (signal?: AbortSignal) => {
-    setActivity((current) =>
-      current === "idle" || current === "loading-constraints"
-        ? "loading-constraints"
-        : current,
-    );
-    setConstraintsError(null);
+  const loadWorkspaceMetadata = useCallback(async (signal?: AbortSignal) => {
+    setActivity("loading-metadata");
+    setMetadataError(null);
 
     try {
-      const result = await getRoomSizeConstraints({ signal });
-      setConstraints(result.constraints);
+      const result = await getMetadata({ signal });
+      setMetadata(result);
+      setRequirements(null);
+      const defaultRoad =
+        result.roadTypes.find((item) => item.value === "main_road") ??
+        result.roadTypes[0];
+      setRoadType(defaultRoad.value);
+      const defaultRatio =
+        result.compatibleAspectRatios.find((item) => item.label === "1:1") ??
+        result.compatibleAspectRatios[0];
+      setAspectRatio(defaultRatio.label);
+      addNotice(
+        "success",
+        "Workspace ready",
+        "Server metadata loaded successfully.",
+      );
     } catch (requestError: unknown) {
       if (signal?.aborted) return;
-      setConstraints([]);
-      setConstraintsError(errorInfo(requestError).message);
+      setMetadata(null);
+      setMetadataError(errorInfo(requestError));
     } finally {
       if (!signal?.aborted) {
-        setActivity((current) =>
-          current === "loading-constraints" ? "idle" : current,
-        );
+        setActivity("idle");
       }
     }
-  }, []);
+  }, [addNotice]);
 
   useEffect(() => {
     const controller = new AbortController();
-    void loadConstraints(controller.signal);
+    void loadWorkspaceMetadata(controller.signal);
     return () => controller.abort();
-  }, [loadConstraints]);
+  }, [loadWorkspaceMetadata]);
+
+  useEffect(() => {
+    if (notices.length === 0) return;
+    const timers = notices.map((notice) =>
+      window.setTimeout(
+        () =>
+          setNotices((current) =>
+            current.filter((item) => item.id !== notice.id),
+          ),
+        5000,
+      ),
+    );
+    return () => timers.forEach(window.clearTimeout);
+  }, [notices]);
 
   useEffect(
     () => () => {
@@ -295,6 +352,11 @@ const FloorPlanWorkspacePage = () => {
       setGenerationMessage(
         "Buildable space is ready. Configure the floor plan.",
       );
+      addNotice(
+        "success",
+        "Buildable space ready",
+        "The server returned a usable floor area.",
+      );
       setActiveTab("generate");
     } catch (requestError: unknown) {
       setError(errorInfo(requestError));
@@ -336,6 +398,7 @@ const FloorPlanWorkspacePage = () => {
             setJobId(openedJobId);
             setGenerationMessage("Generation stream connected.");
           },
+          onJobId: (openedJobId) => setJobId(openedJobId),
           onEvent: (event) => {
             switch (event.event) {
               case "status":
@@ -439,6 +502,11 @@ const FloorPlanWorkspacePage = () => {
           ? "Cancellation was already requested. Waiting for the terminal event…"
           : "Cancellation requested. Waiting for the stream to close…",
       );
+      addNotice(
+        "info",
+        "Cancellation requested",
+        "Waiting for the server to send the terminal stream event.",
+      );
     } catch (requestError: unknown) {
       setError(errorInfo(requestError));
       setActivity("generating");
@@ -449,6 +517,76 @@ const FloorPlanWorkspacePage = () => {
     clearGenerationOutput();
     setError(null);
   };
+
+  if (metadata === null) {
+    const loading = activity === "loading-metadata";
+    const failureNotice: FeedbackNoticeData | null = metadataError
+      ? {
+          id: -1,
+          severity: "error",
+          title: "Workspace metadata unavailable",
+          message: metadataError.message,
+        }
+      : null;
+
+    return (
+      <div className="flex min-h-[60vh] flex-1 items-center justify-center bg-slate-100 p-6">
+        <div className="w-full max-w-lg rounded-2xl border border-slate-200 bg-white p-6 shadow-xl">
+          {loading ? (
+            <div role="status" className="flex items-start gap-3">
+              <span className="mt-0.5 h-5 w-5 shrink-0 animate-spin rounded-full border-2 border-indigo-200 border-t-indigo-600" />
+              <div>
+                <h1 className="font-bold text-slate-950">
+                  Preparing workspace
+                </h1>
+                <p className="mt-1 text-sm text-slate-600">
+                  Loading supported rooms, roads, ratios, and validation rules
+                  from the server.
+                </p>
+              </div>
+            </div>
+          ) : failureNotice ? (
+            <>
+              <FeedbackNotice notice={failureNotice} />
+              {(metadataError?.code || metadataError?.stage) && (
+                <dl className="mt-3 grid gap-1 px-1 text-xs text-slate-500">
+                  {metadataError.code && (
+                    <div>
+                      <dt className="inline font-semibold">Code: </dt>
+                      <dd className="inline">{metadataError.code}</dd>
+                    </div>
+                  )}
+                  {metadataError.stage && (
+                    <div>
+                      <dt className="inline font-semibold">Stage: </dt>
+                      <dd className="inline">{metadataError.stage}</dd>
+                    </div>
+                  )}
+                </dl>
+              )}
+              {metadataError?.details !== undefined && (
+                <details className="mt-3 text-xs text-slate-600">
+                  <summary className="cursor-pointer font-semibold">
+                    Technical details
+                  </summary>
+                  <pre className="mt-2 max-h-48 overflow-auto whitespace-pre-wrap break-words rounded-lg bg-slate-50 p-3 font-mono text-[11px]">
+                    {JSON.stringify(metadataError.details, null, 2)}
+                  </pre>
+                </details>
+              )}
+              <button
+                type="button"
+                onClick={() => void loadWorkspaceMetadata()}
+                className="mt-5 w-full rounded-xl bg-indigo-600 px-4 py-3 text-sm font-bold text-white hover:bg-indigo-700"
+              >
+                Retry metadata
+              </button>
+            </>
+          ) : null}
+        </div>
+      </div>
+    );
+  }
 
   const phase: FloorPlanWorkspacePhase =
     activity === "generating" || activity === "cancelling"
@@ -501,11 +639,10 @@ const FloorPlanWorkspacePage = () => {
             landArea={landArea}
             targetAreaInput={targetAreaInput}
             roadType={roadType}
+            metadata={metadata}
             buildableResult={buildableResult}
             aspectRatio={aspectRatio}
             requirements={requirements}
-            constraintsReady={constraints.length > 0}
-            constraintsError={constraintsError}
             activity={activity}
             generationMessage={generationMessage}
             jobId={jobId}
@@ -527,7 +664,6 @@ const FloorPlanWorkspacePage = () => {
             onGenerate={() => void generateFloorPlan()}
             onCancelGeneration={() => void cancelGeneration()}
             onResetGeneration={resetGeneration}
-            onRetryConstraints={() => void loadConstraints()}
           />
         )}
       />
@@ -535,7 +671,7 @@ const FloorPlanWorkspacePage = () => {
       {buildableResult && (
         <RoomRequirementsDialog
           open={requirementsOpen}
-          constraints={constraints}
+          metadata={metadata}
           maxWidth={buildableResult.usableLand.width}
           maxLength={buildableResult.usableLand.length}
           initialValue={requirements}
@@ -545,9 +681,20 @@ const FloorPlanWorkspacePage = () => {
             setRequirementsOpen(false);
             clearGenerationOutput();
             setGenerationMessage("Room requirements saved.");
+            addNotice(
+              "success",
+              "Requirements saved",
+              "Room selections passed client-side validation.",
+            );
           }}
         />
       )}
+      <FeedbackNoticeStack
+        notices={notices}
+        onDismiss={(id) =>
+          setNotices((current) => current.filter((notice) => notice.id !== id))
+        }
+      />
     </div>
   );
 };

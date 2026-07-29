@@ -99,15 +99,14 @@ if (result.status === "completed" && result.selectedFloorPlan) {
 }
 ```
 
-## Generation reference and cancellation
+## Metadata and cancellation
 
 ```ts
-import {
-  cancelFloorPlanGeneration,
-  getRoomSizeConstraints,
-} from "./service/floor-plan";
+import { getMetadata } from "./service/metadata";
+import { cancelFloorPlanGeneration } from "./service/floor-plan";
 
-const { constraints } = await getRoomSizeConstraints();
+const metadata = await getMetadata();
+console.log(metadata.roomSizes, metadata.roomRequirements);
 const cancellation = await cancelFloorPlanGeneration(session.jobId!);
 ```
 

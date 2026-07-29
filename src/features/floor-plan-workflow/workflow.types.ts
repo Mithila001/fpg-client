@@ -4,7 +4,6 @@ export interface RoomRequirementSelection {
   roomType: RoomType;
   count: number;
   size: string;
-  required: boolean;
 }
 
 export interface FloorPlanRequirements {
@@ -20,12 +19,14 @@ export type WorkflowTab = "land" | "generate";
 export interface WorkflowErrorInfo {
   message: string;
   code?: string;
+  stage?: string;
   flowId?: string;
+  details?: unknown;
 }
 
 export type WorkflowActivity =
   | "idle"
-  | "loading-constraints"
+  | "loading-metadata"
   | "finding-buildable-space"
   | "generating"
   | "cancelling";

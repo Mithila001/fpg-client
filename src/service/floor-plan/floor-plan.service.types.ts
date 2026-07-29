@@ -11,6 +11,7 @@ export type FloorPlanStreamCloseReason =
 
 export interface FloorPlanStreamHandlers {
   onOpen?: (jobId: string | null) => void;
+  onJobId?: (jobId: string) => void;
   onEvent: (event: GenerationSseEvent) => void | Promise<void>;
   onClose?: (reason: FloorPlanStreamCloseReason) => void;
   onError?: (error: Error) => void;

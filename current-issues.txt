@@ -1,3 +1,2 @@
-# Client cannot properly Connect with SSE (doest not know if this server issue or Client Issue)
-# The Error Handling is Poor
-# Client Needed to Update the Auto Validation Feature of Room Configuration
+# Significant UI Finitude Required (Not Important Right now)
+# Need to Check what kind of data does the Client Actually Sending to server

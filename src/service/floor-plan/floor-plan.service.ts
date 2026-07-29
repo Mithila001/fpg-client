@@ -103,7 +103,7 @@ const createGenerationError = (
     code: event.payload.code,
     stage: event.payload.stage,
     eventName: event.event,
-    details: event.payload,
+    details: event.payload.details,
   });
 };
 
@@ -219,7 +219,7 @@ export const startFloorPlanGeneration = async (
       status: response.status,
       code: errorDetails.code,
       stage: errorDetails.stage,
-      details: body,
+      details: errorDetails.details ?? body,
     });
   }
 
@@ -251,19 +251,13 @@ export const startFloorPlanGeneration = async (
     });
   }
 
-  resolvedJobId = response.headers.get("X-Generation-Job-ID");
-  if (resolvedJobId === null || resolvedJobId.trim().length === 0) {
-    options.signal?.removeEventListener("abort", forwardExternalAbort);
-    closed = true;
-    controller.abort("Generation job ID header was not returned.");
-    throw new FloorPlanServiceError({
-      kind: "invalid_response",
-      message:
-        "The floor-plan stream response did not expose X-Generation-Job-ID.",
-      status: response.status,
-    });
-  }
+  const headerJobId = response.headers.get("X-Generation-Job-ID")?.trim();
+  resolvedJobId =
+    headerJobId !== undefined && headerJobId.length > 0 ? headerJobId : null;
   handlers.onOpen?.(resolvedJobId);
+  if (resolvedJobId !== null) {
+    handlers.onJobId?.(resolvedJobId);
+  }
 
   const responseBody = response.body;
 
@@ -300,6 +294,7 @@ export const startFloorPlanGeneration = async (
 
         if (resolvedJobId === null) {
           resolvedJobId = event.jobId;
+          handlers.onJobId?.(event.jobId);
         }
 
         // Gaps are allowed because progress/trial events can be coalesced or
@@ -324,17 +319,20 @@ export const startFloorPlanGeneration = async (
 
         if (event.event === "error") {
           generationError = createGenerationError(event);
-          return;
+          return false;
         }
 
         if (event.event === "completed") {
           completedEvent = event;
-          return;
+          return false;
         }
 
         if (event.event === "cancelled") {
           cancelledEvent = event;
+          return false;
         }
+
+        return true;
       });
 
       if (closeRequested || controller.signal.aborted) {

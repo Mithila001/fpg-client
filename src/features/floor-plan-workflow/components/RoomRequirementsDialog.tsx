@@ -1,6 +1,10 @@
 import { useEffect, useMemo, useState, type ChangeEvent } from "react";
 import { PROJECT_UNITS_PER_METER } from "../../../measurement";
-import type { RoomSizeConstraint, RoomType } from "../../../types";
+import {
+  ROOM_TYPES,
+  type RoomType,
+  type WorkspaceMetadata,
+} from "../../../types";
 import type {
   FloorPlanRequirements,
   RoomRequirementSelection,
@@ -12,7 +16,7 @@ interface EditableRoomSelection extends RoomRequirementSelection {
 
 interface RoomRequirementsDialogProps {
   open: boolean;
-  constraints: RoomSizeConstraint[];
+  metadata: WorkspaceMetadata;
   maxWidth: number;
   maxLength: number;
   initialValue: FloorPlanRequirements | null;
@@ -29,14 +33,14 @@ const parseMeters = (value: string): number | null => {
   return parsed * PROJECT_UNITS_PER_METER;
 };
 
-const roomLabel = (roomType: RoomType): string => {
+const roomLabel = (roomType: string): string => {
   const words = roomType.replaceAll("_", " ");
   return words.charAt(0).toUpperCase() + words.slice(1);
 };
 
 export const RoomRequirementsDialog = ({
   open,
-  constraints,
+  metadata,
   maxWidth,
   maxLength,
   initialValue,
@@ -44,17 +48,27 @@ export const RoomRequirementsDialog = ({
   onSave,
 }: RoomRequirementsDialogProps) => {
   const roomCatalog = useMemo(() => {
-    const sizesByRoom = new Map<RoomType, string[]>();
-    constraints.forEach((constraint) => {
-      const sizes = sizesByRoom.get(constraint.roomType) ?? [];
-      if (!sizes.includes(constraint.size)) sizes.push(constraint.size);
-      sizesByRoom.set(constraint.roomType, sizes);
-    });
-    return Array.from(sizesByRoom, ([roomType, sizes]) => ({
-      roomType,
-      sizes,
-    }));
-  }, [constraints]);
+    const supportedTypes = new Set<string>(ROOM_TYPES);
+    return metadata.roomRequirements
+      .filter(
+        (requirement) =>
+          requirement.clientSelectable &&
+          supportedTypes.has(requirement.roomType),
+      )
+      .map((requirement) => ({
+        roomType: requirement.roomType as RoomType,
+        name: requirement.name,
+        minCount: requirement.minCount,
+        maxCount: requirement.maxCount,
+        sizes: metadata.roomSizes
+          .filter((size) => size.roomType === requirement.roomType)
+          .map((size) => size.size),
+        relations: metadata.roomRelations.filter(
+          (relation) => relation.sourceRoomType === requirement.roomType,
+        ),
+      }))
+      .filter((room) => room.sizes.length > 0);
+  }, [metadata]);
 
   const [widthInput, setWidthInput] = useState("");
   const [lengthInput, setLengthInput] = useState("");
@@ -75,17 +89,17 @@ export const RoomRequirementsDialog = ({
     );
 
     setRooms(
-      roomCatalog.map(({ roomType, sizes }) => {
+      roomCatalog.map(({ roomType, sizes, minCount }) => {
         const existing = previous.get(roomType);
+        const mandatory = minCount > 0;
         return {
           roomType,
-          count: existing?.count ?? 0,
+          count: existing?.count ?? minCount,
           size:
             existing && sizes.includes(existing.size)
               ? existing.size
               : (sizes[0] ?? ""),
-          required: true,
-          enabled: existing !== undefined,
+          enabled: mandatory || existing !== undefined,
         };
       }),
     );
@@ -99,7 +113,7 @@ export const RoomRequirementsDialog = ({
     if (floorWidth === null || floorLength === null) return "unknown" as const;
 
     const lookup = new Map(
-      constraints.map((constraint) => [
+      metadata.roomSizes.map((constraint) => [
         `${constraint.roomType}:${constraint.size}`,
         constraint.minArea,
       ]),
@@ -107,17 +121,20 @@ export const RoomRequirementsDialog = ({
     const selected = rooms.filter((room) => room.enabled && room.count > 0);
     if (selected.length === 0) return "unknown" as const;
 
-    const minimumArea = selected.reduce(
+    const minimumArea =
+      selected.reduce(
       (sum, room) =>
         sum +
         (lookup.get(`${room.roomType}:${room.size}`) ?? 0) * room.count,
       0,
-    );
+      ) +
+      metadata.buffers.hallwayArea +
+      metadata.buffers.floorArea;
     const availableArea = floorWidth * floorLength;
     if (minimumArea > availableArea) return "impossible" as const;
     if (minimumArea > availableArea * 0.75) return "tight" as const;
     return "good" as const;
-  }, [constraints, floorLength, floorWidth, rooms]);
+  }, [floorLength, floorWidth, metadata, rooms]);
 
   if (!open) return null;
 
@@ -145,8 +162,27 @@ export const RoomRequirementsDialog = ({
     const selected = rooms.filter(
       (room) => room.enabled && room.count > 0 && room.size.length > 0,
     );
-    if (selected.length === 0) {
-      setError("Select at least one room.");
+    const invalidCount = roomCatalog.find((catalogRoom) => {
+      const selectedRoom = rooms.find(
+        (room) => room.roomType === catalogRoom.roomType,
+      );
+      const count = selectedRoom?.enabled ? selectedRoom.count : 0;
+      return count < catalogRoom.minCount || count > catalogRoom.maxCount;
+    });
+    if (invalidCount) {
+      setError(
+        `${roomLabel(invalidCount.roomType)} count must be between ${invalidCount.minCount} and ${invalidCount.maxCount}.`,
+      );
+      return;
+    }
+
+    const bedroomCount =
+      selected.find((room) => room.roomType === "bedroom")?.count ?? 0;
+    const attachedBathroomCount =
+      selected.find((room) => room.roomType === "attached_bathroom")?.count ??
+      0;
+    if (attachedBathroomCount > bedroomCount) {
+      setError("Attached bathrooms cannot exceed the bedroom count.");
       return;
     }
     if (feasibility === "impossible") {
@@ -160,7 +196,6 @@ export const RoomRequirementsDialog = ({
         roomType: selection.roomType,
         name: `${roomLabel(selection.roomType)} ${index + 1}`,
         requestedSize: selection.size,
-        required: true,
       })),
     );
 
@@ -179,7 +214,6 @@ export const RoomRequirementsDialog = ({
         roomType: selection.roomType,
         count: selection.count,
         size: selection.size,
-        required: true,
       })),
       summary,
     });
@@ -274,6 +308,7 @@ export const RoomRequirementsDialog = ({
                 (item) => item.roomType === room.roomType,
               );
               const sizes = catalogEntry?.sizes ?? [];
+              const mandatory = (catalogEntry?.minCount ?? 0) > 0;
 
               return (
                 <div
@@ -284,11 +319,12 @@ export const RoomRequirementsDialog = ({
                     <input
                       type="checkbox"
                       checked={room.enabled}
+                      disabled={mandatory}
                       onChange={(event: ChangeEvent<HTMLInputElement>) =>
                         updateRoom(room.roomType, {
                           enabled: event.target.checked,
                           count: event.target.checked
-                            ? Math.max(1, room.count)
+                            ? Math.max(catalogEntry?.minCount ?? 1, room.count)
                             : 0,
                         })
                       }
@@ -299,24 +335,36 @@ export const RoomRequirementsDialog = ({
                         {roomLabel(room.roomType)}
                       </span>
                       <span className="text-xs text-slate-500">
-                        Optional until selected
+                        {mandatory
+                          ? `Required · ${catalogEntry?.minCount}–${catalogEntry?.maxCount}`
+                          : `Optional · maximum ${catalogEntry?.maxCount}`}
                       </span>
+                      {(catalogEntry?.relations.length ?? 0) > 0 && (
+                        <span className="mt-1 block text-xs text-slate-400">
+                          {catalogEntry?.relations
+                            .map(
+                              (relation) =>
+                                `${relation.strength === "hard" ? "Connects" : "Prefers"} ${relation.targetRoomTypes.map(roomLabel).join(relation.matchPolicy === "and" ? " and " : " or ")}`,
+                            )
+                            .join(" · ")}
+                        </span>
+                      )}
                     </span>
                   </label>
 
                   <input
                     aria-label={`${roomLabel(room.roomType)} count`}
                     type="number"
-                    min={1}
-                    max={10}
+                    min={catalogEntry?.minCount ?? 0}
+                    max={catalogEntry?.maxCount ?? 1}
                     value={room.count}
                     disabled={!room.enabled}
                     onChange={(event: ChangeEvent<HTMLInputElement>) =>
                       updateRoom(room.roomType, {
                         count: Math.min(
-                          10,
+                          catalogEntry?.maxCount ?? 1,
                           Math.max(
-                            1,
+                            catalogEntry?.minCount ?? 0,
                             Number.parseInt(event.target.value, 10) || 1,
                           ),
                         ),
@@ -363,7 +411,7 @@ export const RoomRequirementsDialog = ({
           <button
             type="button"
             onClick={submit}
-            disabled={constraints.length === 0}
+            disabled={roomCatalog.length === 0}
             className="rounded-lg bg-indigo-600 px-4 py-2.5 text-sm font-semibold text-white shadow-sm hover:bg-indigo-700 disabled:cursor-not-allowed disabled:opacity-50"
           >
             Save requirements

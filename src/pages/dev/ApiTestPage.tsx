@@ -210,7 +210,6 @@ const MOCK_FLOOR_PLAN_REQUEST: FloorPlanGenerationRequest = {
       roomType: "bedroom",
       name: "Bedroom 1",
       requestedSize: "regular",
-      required: true,
     },
     {
       id: "bathroom_1",

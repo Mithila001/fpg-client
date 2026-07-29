@@ -5,7 +5,11 @@ import {
   type ReactNode,
 } from "react";
 import { formatProjectArea, formatProjectLength } from "../../../measurement";
-import type { BuildableSpaceResult, RoadType } from "../../../types";
+import type {
+  BuildableSpaceResult,
+  RoadType,
+  WorkspaceMetadata,
+} from "../../../types";
 import type { FloorPlanEditorSnapshot } from "../../floor-plan-editor";
 import type {
   FloorPlanRequirements,
@@ -20,11 +24,10 @@ interface WorkflowSidebarProps {
   landArea: number;
   targetAreaInput: string;
   roadType: RoadType;
+  metadata: WorkspaceMetadata;
   buildableResult: BuildableSpaceResult | null;
   aspectRatio: string;
   requirements: FloorPlanRequirements | null;
-  constraintsReady: boolean;
-  constraintsError: string | null;
   activity: WorkflowActivity;
   generationMessage: string;
   jobId: string | null;
@@ -46,7 +49,6 @@ interface WorkflowSidebarProps {
   onGenerate: () => void;
   onCancelGeneration: () => void;
   onResetGeneration: () => void;
-  onRetryConstraints: () => void;
 }
 
 const sectionClassName =
@@ -58,11 +60,10 @@ export const WorkflowSidebar = ({
   landArea,
   targetAreaInput,
   roadType,
+  metadata,
   buildableResult,
   aspectRatio,
   requirements,
-  constraintsReady,
-  constraintsError,
   activity,
   generationMessage,
   jobId,
@@ -84,7 +85,6 @@ export const WorkflowSidebar = ({
   onGenerate,
   onCancelGeneration,
   onResetGeneration,
-  onRetryConstraints,
 }: WorkflowSidebarProps) => {
   const landTabRef = useRef<HTMLButtonElement>(null);
   const generateTabRef = useRef<HTMLButtonElement>(null);
@@ -94,7 +94,7 @@ export const WorkflowSidebar = ({
     activity === "cancelling";
   const canFindBuildable =
     snapshot.isValid && snapshot.value.roads.length === 1 && !busy;
-  const canConfigure = buildableResult !== null && constraintsReady && !busy;
+  const canConfigure = buildableResult !== null && !busy;
   const canGenerate = requirements !== null && buildableResult !== null && !busy;
   const progressPercent =
     progress?.current !== undefined &&
@@ -219,8 +219,11 @@ export const WorkflowSidebar = ({
                 disabled={busy}
                 className="mt-1.5 w-full rounded-lg border border-slate-300 bg-white px-3 py-2.5 text-sm disabled:bg-slate-100"
               >
-                <option value="main_road">Main road</option>
-                <option value="private_road">Private road</option>
+                {metadata.roadTypes.map((option) => (
+                  <option key={option.value} value={option.value}>
+                    {option.displayName}
+                  </option>
+                ))}
               </select>
             </label>
 
@@ -319,11 +322,11 @@ export const WorkflowSidebar = ({
                 disabled={!buildableResult || busy}
                 className="mt-1.5 w-full rounded-lg border border-slate-300 bg-white px-3 py-2.5 text-sm disabled:bg-slate-100 disabled:text-slate-400"
               >
-                <option value="1:1">1:1 Square</option>
-                <option value="4:3">4:3 Standard</option>
-                <option value="3:4">3:4 Portrait</option>
-                <option value="1:1.6">1:1.6 Tall</option>
-                <option value="1.6:1">1.6:1 Wide</option>
+                {metadata.compatibleAspectRatios.map((option) => (
+                  <option key={option.label} value={option.label}>
+                    {option.label}
+                  </option>
+                ))}
               </select>
             </label>
 
@@ -335,20 +338,6 @@ export const WorkflowSidebar = ({
             >
               {requirements ? "Edit room requirements" : "Configure rooms"}
             </button>
-
-            {constraintsError && (
-              <div className="mt-3 rounded-lg border border-amber-200 bg-amber-50 p-3 text-xs text-amber-800">
-                <p>{constraintsError}</p>
-                <button
-                  type="button"
-                  onClick={onRetryConstraints}
-                  disabled={activity === "loading-constraints" || busy}
-                  className="mt-2 font-bold underline underline-offset-2 disabled:opacity-50"
-                >
-                  {activity === "loading-constraints" ? "Retrying…" : "Retry"}
-                </button>
-              </div>
-            )}
 
             <div className="mt-3 rounded-xl border border-slate-200 bg-slate-50 p-3">
               <p className="text-xs font-bold uppercase tracking-wide text-slate-500">
@@ -461,12 +450,18 @@ export const WorkflowSidebar = ({
           >
             <strong className="block">Request failed</strong>
             <span className="mt-1 block text-xs leading-5">{error.message}</span>
-            {(error.code || error.flowId) && (
+            {(error.code || error.stage || error.flowId) && (
               <dl className="mt-2 grid gap-1 text-xs">
                 {error.code && (
                   <div>
                     <dt className="inline font-semibold">Code: </dt>
                     <dd className="inline">{error.code}</dd>
+                  </div>
+                )}
+                {error.stage && (
+                  <div>
+                    <dt className="inline font-semibold">Stage: </dt>
+                    <dd className="inline">{error.stage}</dd>
                   </div>
                 )}
                 {error.flowId && (
@@ -476,6 +471,16 @@ export const WorkflowSidebar = ({
                   </div>
                 )}
               </dl>
+            )}
+            {error.details !== undefined && (
+              <details className="mt-3 text-xs">
+                <summary className="cursor-pointer font-semibold">
+                  Technical details
+                </summary>
+                <pre className="mt-2 max-h-40 overflow-auto whitespace-pre-wrap break-words rounded-lg bg-white/60 p-2 font-mono text-[11px]">
+                  {JSON.stringify(error.details, null, 2)}
+                </pre>
+              </details>
             )}
           </section>
         )}

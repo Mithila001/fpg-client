@@ -80,7 +80,7 @@ export const consumeSseStream = async (
   const decoder = new TextDecoder("utf-8");
   let buffer = "";
 
-  const emitAvailableBlocks = async (): Promise<void> => {
+  const emitAvailableBlocks = async (): Promise<boolean> => {
     let boundaryIndex = buffer.indexOf("\n\n");
 
     while (boundaryIndex >= 0) {
@@ -89,11 +89,16 @@ export const consumeSseStream = async (
 
       const frame = parseSseBlock(block);
       if (frame !== null) {
-        await onFrame(frame);
+        const shouldContinue = await onFrame(frame);
+        if (shouldContinue === false) {
+          return false;
+        }
       }
 
       boundaryIndex = buffer.indexOf("\n\n");
     }
+
+    return true;
   };
 
   try {
@@ -105,7 +110,11 @@ export const consumeSseStream = async (
       }
 
       buffer = normalizeNewlines(buffer, done);
-      await emitAvailableBlocks();
+      const shouldContinue = await emitAvailableBlocks();
+      if (!shouldContinue) {
+        await reader.cancel().catch(() => undefined);
+        return;
+      }
 
       if (done) {
         const trailingBlock = buffer.trim();

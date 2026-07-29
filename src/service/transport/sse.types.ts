@@ -7,4 +7,4 @@ export interface SseFrame {
 
 export type SseFrameHandler = (
   frame: SseFrame,
-) => void | Promise<void>;
+) => boolean | void | Promise<boolean | void>;

@@ -8,10 +8,8 @@ export const ROOM_TYPES = [
   "living_room",
   "kitchen",
   "dining_room",
-  "hallway",
   "veranda",
   "garage",
-  "open_area",
 ] as const;
 export type RoomType = (typeof ROOM_TYPES)[number];
 
@@ -25,20 +23,6 @@ export interface GenerationRoom {
   id?: string | null;
   name?: string | null;
   requestedSize?: string | null;
-  required?: boolean;
-}
-
-export interface RoomSizeConstraint {
-  roomType: RoomType;
-  size: string;
-  minWidth: ProjectLength;
-  maxWidth: ProjectLength;
-  minArea: ProjectArea;
-  maxArea: ProjectArea;
-}
-
-export interface RoomSizeConstraintsResult {
-  constraints: RoomSizeConstraint[];
 }
 
 export const GENERATION_CANCELLATION_STATUSES = [
@@ -69,7 +53,7 @@ export interface RoomMetadata {
 
 export interface FloorPlanRoom {
   id: string;
-  roomType: RoomType;
+  roomType: string;
   name: string;
   boundary: Polygon;
   role: RoomRole;
@@ -244,7 +228,7 @@ export interface CandidateHint {
   roomId: string;
   x: ProjectLength;
   y: ProjectLength;
-  roomType: RoomType | null;
+  roomType: string | null;
   hintIndex: number;
 }
 
@@ -286,6 +270,7 @@ export interface StreamErrorPayload {
   stage: string;
   code: string;
   message: string;
+  details: Record<string, unknown>;
   recoverable: boolean;
 }
 

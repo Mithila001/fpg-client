@@ -1,28 +1,15 @@
-import type {
-  GenerationCancellationResult,
-  RoomSizeConstraintsResult,
-} from "../../types";
+import type { GenerationCancellationResult } from "../../types";
 import { createApiUrl } from "../http";
 import { FloorPlanServiceError } from "./floor-plan.errors";
 import {
   fromGenerationCancellationApiResponse,
-  fromRoomSizeConstraintsApiResponse,
 } from "./floor-plan.mapper";
 import type { FloorPlanRequestOptions } from "./floor-plan.service.types";
 import {
   extractGenerationHttpError,
   parseGenerationCancellationResponse,
-  parseRoomSizeConstraintsResponse,
   readGenerationHttpErrorBody,
 } from "./floor-plan.validators";
-
-const configuredConstraintsPath =
-  import.meta.env.VITE_ROOM_SIZE_CONSTRAINTS_PATH?.trim();
-
-export const ROOM_SIZE_CONSTRAINTS_PATH =
-  configuredConstraintsPath && configuredConstraintsPath.length > 0
-    ? configuredConstraintsPath
-    : "/generation/room-size-constraints";
 
 const configuredStreamPath = import.meta.env.VITE_FLOOR_PLAN_STREAM_PATH?.trim();
 
@@ -85,49 +72,8 @@ const throwHttpError = async (
     jobId,
     code: details.code,
     stage: details.stage,
-    details: body,
+    details: details.details ?? body,
   });
-};
-
-export const getRoomSizeConstraints = async (
-  options: FloorPlanRequestOptions = {},
-): Promise<RoomSizeConstraintsResult> => {
-  const fetchImplementation = options.fetchImplementation ?? fetch;
-
-  let response: Response;
-  try {
-    response = await fetchImplementation(createApiUrl(ROOM_SIZE_CONSTRAINTS_PATH), {
-      method: "GET",
-      headers: mergeHeaders({ Accept: "application/json" }, options.headers),
-      signal: options.signal,
-    });
-  } catch (error: unknown) {
-    if (options.signal?.aborted || isAbortError(error)) {
-      throw new FloorPlanServiceError({
-        kind: "aborted",
-        message: "The room-size constraints request was aborted.",
-        cause: error,
-      });
-    }
-
-    throw new FloorPlanServiceError({
-      kind: "transport",
-      message: "Unable to load generation room-size constraints.",
-      cause: error,
-    });
-  }
-
-  if (!response.ok) {
-    return throwHttpError(
-      response,
-      `Room-size constraints request failed with HTTP status ${response.status}.`,
-    );
-  }
-
-  const body = await readJsonSuccessBody(response);
-  return fromRoomSizeConstraintsApiResponse(
-    parseRoomSizeConstraintsResponse(body),
-  );
 };
 
 export const cancelFloorPlanGeneration = async (

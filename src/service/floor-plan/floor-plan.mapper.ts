@@ -26,8 +26,6 @@ import type {
   Polygon,
   ProgressEvent,
   ProgressPayload,
-  RoomSizeConstraint,
-  RoomSizeConstraintsResult,
   RoomMetadata,
   ScoreFinding,
   ScoreMetric,
@@ -64,8 +62,6 @@ import type {
   Polygon as ApiPolygon,
   ProgressEvent as ApiProgressEvent,
   ProgressPayload as ApiProgressPayload,
-  RoomSizeConstraint as ApiRoomSizeConstraint,
-  RoomSizeConstraintsResponse as ApiRoomSizeConstraintsResponse,
   RoomMetadata as ApiRoomMetadata,
   ScoreFinding as ApiScoreFinding,
   ScoreMetric as ApiScoreMetric,
@@ -106,7 +102,6 @@ const toApiGenerationRoom = (
   id: room.id,
   name: room.name,
   requested_size: room.requestedSize,
-  required: room.required,
 });
 
 const fromApiGenerationRoom = (
@@ -116,24 +111,6 @@ const fromApiGenerationRoom = (
   id: room.id,
   name: room.name,
   requestedSize: room.requested_size,
-  required: room.required,
-});
-
-const fromApiRoomSizeConstraint = (
-  constraint: ApiRoomSizeConstraint,
-): RoomSizeConstraint => ({
-  roomType: constraint.room_type,
-  size: constraint.size,
-  minWidth: apiLengthToProjectLength(constraint.min_width),
-  maxWidth: apiLengthToProjectLength(constraint.max_width),
-  minArea: apiAreaToProjectArea(constraint.min_area),
-  maxArea: apiAreaToProjectArea(constraint.max_area),
-});
-
-export const fromRoomSizeConstraintsApiResponse = (
-  response: ApiRoomSizeConstraintsResponse,
-): RoomSizeConstraintsResult => ({
-  constraints: response.room_size_constraints.map(fromApiRoomSizeConstraint),
 });
 
 export const fromGenerationCancellationApiResponse = (
@@ -563,6 +540,7 @@ const toApiStreamErrorPayload = (
   stage: payload.stage,
   code: payload.code,
   message: payload.message,
+  details: payload.details,
   recoverable: payload.recoverable,
 });
 
@@ -572,6 +550,7 @@ const fromApiStreamErrorPayload = (
   stage: payload.stage,
   code: payload.code,
   message: payload.message,
+  details: payload.details,
   recoverable: payload.recoverable,
 });
 
