@@ -1,11 +1,18 @@
-# Floor Plan Editor feature
+# Floor-plan workspace
 
-A bounded UI feature for editing the land boundary and entry-road attachment.
+This feature owns the shared Konva workspace used across the floor-plan workflow.
 
-- `engine/`: pure state transitions, geometry, commands, and rules. No React or Konva.
-- `controller/`: React adapter that owns the reducer and publishes stable actions.
-- `canvas/`: Konva rendering and pointer/viewport translation only.
-- `panels/`: feature UI controls and inspection surfaces.
-- `index.ts`: the only supported import surface for the rest of the application.
+## Public components
 
-The public value is the application-level `BuildableSpaceRequest`. Temporary selections, road previews, viewport state, and command types stay private to the feature.
+- `FloorPlanEditor`: backward-compatible land/road editor.
+- `FloorPlanWorkspace`: phase-based workspace for editing, buildable-space review, generation progress, final-plan viewing, and no-result display.
+
+## Design
+
+- `FloorPlanCanvas` owns viewport behavior only: resize, pan, zoom, fit, grid, blur, and HTML overlays.
+- `scenes/` compose the visible content for each workflow phase.
+- `layers/` render one type of geometry and do not call APIs.
+- `controller/` and `engine/` continue to own land-editing state, commands, rules, and validation.
+- API and SSE code must prepare application-level data and pass it into `FloorPlanWorkspace`.
+
+Adding a visual feature normally means adding a layer and composing it into the relevant scene. It should not require changing viewport or editor-engine code.

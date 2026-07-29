@@ -4,14 +4,17 @@ import { formatProjectLength } from "../../../../measurement";
 import { polygonCentroid } from "../../engine/geometry/polygon";
 import { distance } from "../../engine/geometry/vector";
 
-interface DimensionLayerProps {
+interface LandDimensionLayerProps {
   points: Point[];
   scale: number;
 }
 
 const DIMENSION_END_INSET_RATIO = 0.1;
 
-export const DimensionLayer = ({ points, scale }: DimensionLayerProps) => {
+export const LandDimensionLayer = ({
+  points,
+  scale,
+}: LandDimensionLayerProps) => {
   const centroid = polygonCentroid(points);
 
   return (
@@ -57,7 +60,7 @@ export const DimensionLayer = ({ points, scale }: DimensionLayerProps) => {
         if (rotation < -90) rotation += 180;
 
         return (
-          <Group key={`dimension-${index}`}>
+          <Group key={`land-dimension-${index}`}>
             <Arrow
               points={[first.x, first.y, second.x, second.y]}
               pointerAtBeginning

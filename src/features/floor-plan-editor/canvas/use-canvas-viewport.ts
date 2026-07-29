@@ -1,29 +1,29 @@
 import { useCallback, useEffect, useRef, useState } from "react";
 import type { Point } from "../../../types";
-import { polygonBounds } from "../engine/geometry/polygon";
 import { clamp } from "../engine/geometry/vector";
-
-interface Viewport {
-  scale: number;
-  x: number;
-  y: number;
-}
-
-interface Size {
-  width: number;
-  height: number;
-}
+import type {
+  CanvasSize,
+  CanvasViewport,
+  WorldBounds,
+} from "./canvas.types";
 
 const MIN_SCALE = 0.5;
 const MAX_SCALE = 80;
 const FIT_PADDING = 48;
 
-export const useCanvasViewport = (points: Point[], size: Size) => {
-  const [viewport, setViewport] = useState<Viewport>({ scale: 1, x: 0, y: 0 });
-  const hasAppliedInitialFit = useRef(false);
+export const useCanvasViewport = (
+  bounds: WorldBounds,
+  size: CanvasSize,
+  fitKey: string,
+) => {
+  const [viewport, setViewport] = useState<CanvasViewport>({
+    scale: 1,
+    x: 0,
+    y: 0,
+  });
+  const previousFitKey = useRef<string | null>(null);
 
   const fit = useCallback(() => {
-    const bounds = polygonBounds(points);
     const availableWidth = Math.max(1, size.width - FIT_PADDING * 2);
     const availableHeight = Math.max(1, size.height - FIT_PADDING * 2);
     const scale = clamp(
@@ -37,14 +37,15 @@ export const useCanvasViewport = (points: Point[], size: Size) => {
       x: (size.width - bounds.width * scale) / 2 - bounds.minX * scale,
       y: (size.height - bounds.height * scale) / 2 - bounds.minY * scale,
     });
-  }, [points, size.height, size.width]);
+  }, [bounds, size.height, size.width]);
 
   useEffect(() => {
-    if (hasAppliedInitialFit.current || points.length === 0) return;
+    if (size.width <= 0 || size.height <= 0) return;
+    if (previousFitKey.current === fitKey) return;
 
-    hasAppliedInitialFit.current = true;
+    previousFitKey.current = fitKey;
     fit();
-  }, [fit, points.length]);
+  }, [fit, fitKey, size.height, size.width]);
 
   const zoomAt = useCallback((screenPoint: Point, factor: number) => {
     setViewport((current) => {

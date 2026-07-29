@@ -9,7 +9,10 @@ import {
   createEditorState,
   editorStateToRequest,
 } from "../engine/editor-reducer";
-import { DEFAULT_EDITOR_CONFIG, DEFAULT_EDITOR_VALUE } from "../engine/model/defaults";
+import {
+  DEFAULT_EDITOR_CONFIG,
+  DEFAULT_EDITOR_VALUE,
+} from "../engine/model/defaults";
 import type { EditorConfig } from "../engine/model/editor-state";
 
 interface UseEditorControllerOptions {
@@ -35,10 +38,11 @@ export const useEditorController = ({
   );
   const reducer = useMemo(() => createEditorReducer(config), [config]);
   const startingValue = value ?? initialValue ?? DEFAULT_EDITOR_VALUE;
-  const [state, dispatch] = useReducer(reducer, startingValue, (current) =>
-    createEditorState(current, config),
+  const [state, dispatch] = useReducer(
+    reducer,
+    startingValue,
+    (current: BuildableSpaceRequest) => createEditorState(current, config),
   );
-  const controlledSignature = value ? JSON.stringify(value) : null;
 
   const snapshot = useMemo<FloorPlanEditorSnapshot>(
     () => ({
@@ -49,19 +53,30 @@ export const useEditorController = ({
     [state],
   );
 
+  const controlledSignature = value ? JSON.stringify(value) : null;
   const internalSignature = JSON.stringify(snapshot.value);
-  useEffect(() => {
-    if (!value || controlledSignature === internalSignature) return;
-    dispatch({ type: "replace-document", value });
-  }, [controlledSignature, internalSignature, value]);
+  const previousControlledSignature = useRef(controlledSignature);
+  const lastEmittedSignature = useRef(internalSignature);
 
-  const lastEmittedSignature = useRef<string>(JSON.stringify(snapshot.value));
   useEffect(() => {
-    const signature = JSON.stringify(snapshot.value);
-    if (signature === lastEmittedSignature.current) return;
-    lastEmittedSignature.current = signature;
+    const externalValueChanged =
+      controlledSignature !== previousControlledSignature.current;
+
+    if (value && externalValueChanged) {
+      previousControlledSignature.current = controlledSignature;
+      lastEmittedSignature.current = controlledSignature ?? internalSignature;
+
+      if (controlledSignature !== internalSignature) {
+        dispatch({ type: "replace-document", value });
+      }
+      return;
+    }
+
+    if (internalSignature === lastEmittedSignature.current) return;
+
+    lastEmittedSignature.current = internalSignature;
     onChange?.(snapshot);
-  }, [onChange, snapshot]);
+  }, [controlledSignature, internalSignature, onChange, snapshot, value]);
 
   const setMode = useCallback(
     (mode: EditorMode) => {
