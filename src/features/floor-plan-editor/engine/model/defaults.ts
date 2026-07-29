@@ -7,7 +7,7 @@ export const DEFAULT_EDITOR_CONFIG: EditorConfig = {
   minimumEdgeLength: 2.4,
   gridStep: 1,
   roadSnapDistance: 6,
-  roadWidth: 75,
+  roadWidth: 20,
   roadLength: 500,
   roadGap: 1.2,
 };

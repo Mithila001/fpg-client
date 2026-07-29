@@ -1,7 +1,7 @@
-import { useCallback, useEffect, useState } from "react";
+import { useCallback, useEffect, useRef, useState } from "react";
 import type { Point } from "../../../types";
-import { clamp } from "../engine/geometry/vector";
 import { polygonBounds } from "../engine/geometry/polygon";
+import { clamp } from "../engine/geometry/vector";
 
 interface Viewport {
   scale: number;
@@ -20,6 +20,7 @@ const FIT_PADDING = 48;
 
 export const useCanvasViewport = (points: Point[], size: Size) => {
   const [viewport, setViewport] = useState<Viewport>({ scale: 1, x: 0, y: 0 });
+  const hasAppliedInitialFit = useRef(false);
 
   const fit = useCallback(() => {
     const bounds = polygonBounds(points);
@@ -30,6 +31,7 @@ export const useCanvasViewport = (points: Point[], size: Size) => {
       MIN_SCALE,
       MAX_SCALE,
     );
+
     setViewport({
       scale,
       x: (size.width - bounds.width * scale) / 2 - bounds.minX * scale,
@@ -38,22 +40,22 @@ export const useCanvasViewport = (points: Point[], size: Size) => {
   }, [points, size.height, size.width]);
 
   useEffect(() => {
-    fit();
-  }, [fit]);
+    if (hasAppliedInitialFit.current || points.length === 0) return;
 
-  const zoomAt = useCallback(
-    (screenPoint: Point, factor: number) => {
-      setViewport((current) => {
-        const scale = clamp(current.scale * factor, MIN_SCALE, MAX_SCALE);
-        return {
-          scale,
-          x: screenPoint.x - ((screenPoint.x - current.x) / current.scale) * scale,
-          y: screenPoint.y - ((screenPoint.y - current.y) / current.scale) * scale,
-        };
-      });
-    },
-    [],
-  );
+    hasAppliedInitialFit.current = true;
+    fit();
+  }, [fit, points.length]);
+
+  const zoomAt = useCallback((screenPoint: Point, factor: number) => {
+    setViewport((current) => {
+      const scale = clamp(current.scale * factor, MIN_SCALE, MAX_SCALE);
+      return {
+        scale,
+        x: screenPoint.x - ((screenPoint.x - current.x) / current.scale) * scale,
+        y: screenPoint.y - ((screenPoint.y - current.y) / current.scale) * scale,
+      };
+    });
+  }, []);
 
   return { viewport, setViewport, fit, zoomAt };
 };

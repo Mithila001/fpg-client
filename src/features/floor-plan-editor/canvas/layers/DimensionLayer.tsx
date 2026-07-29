@@ -9,6 +9,8 @@ interface DimensionLayerProps {
   scale: number;
 }
 
+const DIMENSION_END_INSET_RATIO = 0.1;
+
 export const DimensionLayer = ({ points, scale }: DimensionLayerProps) => {
   const centroid = polygonCentroid(points);
 
@@ -21,16 +23,31 @@ export const DimensionLayer = ({ points, scale }: DimensionLayerProps) => {
         const length = Math.hypot(dx, dy);
         if (length < 1e-8) return null;
 
-        const midpoint = { x: (start.x + end.x) / 2, y: (start.y + end.y) / 2 };
-        const normal = { x: -dy / length, y: dx / length };
-        const fromCenter = { x: midpoint.x - centroid.x, y: midpoint.y - centroid.y };
-        const direction = normal.x * fromCenter.x + normal.y * fromCenter.y > 0 ? 1 : -1;
+        const tangent = { x: dx / length, y: dy / length };
+        const midpoint = {
+          x: (start.x + end.x) / 2,
+          y: (start.y + end.y) / 2,
+        };
+        const normal = { x: -tangent.y, y: tangent.x };
+        const fromCenter = {
+          x: midpoint.x - centroid.x,
+          y: midpoint.y - centroid.y,
+        };
+        const direction =
+          normal.x * fromCenter.x + normal.y * fromCenter.y > 0 ? 1 : -1;
         const offset = 22 / scale;
         const labelOffset = 12 / scale;
         const nx = normal.x * direction;
         const ny = normal.y * direction;
-        const first = { x: start.x + nx * offset, y: start.y + ny * offset };
-        const second = { x: end.x + nx * offset, y: end.y + ny * offset };
+        const endInset = length * DIMENSION_END_INSET_RATIO;
+        const first = {
+          x: start.x + tangent.x * endInset + nx * offset,
+          y: start.y + tangent.y * endInset + ny * offset,
+        };
+        const second = {
+          x: end.x - tangent.x * endInset + nx * offset,
+          y: end.y - tangent.y * endInset + ny * offset,
+        };
         const label = {
           x: midpoint.x + nx * (offset + labelOffset),
           y: midpoint.y + ny * (offset + labelOffset),
