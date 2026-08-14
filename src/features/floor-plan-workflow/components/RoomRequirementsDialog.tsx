@@ -30,7 +30,7 @@ const toMetersInput = (projectLength: number): string =>
 const parseMeters = (value: string): number | null => {
   const parsed = Number(value);
   if (!Number.isFinite(parsed) || parsed <= 0) return null;
-  return parsed * PROJECT_UNITS_PER_METER;
+  return Math.round(parsed * PROJECT_UNITS_PER_METER);
 };
 
 const roomLabel = (roomType: string): string => {
@@ -57,15 +57,11 @@ export const RoomRequirementsDialog = ({
       )
       .map((requirement) => ({
         roomType: requirement.roomType as RoomType,
-        name: requirement.name,
         minCount: requirement.minCount,
         maxCount: requirement.maxCount,
         sizes: metadata.roomSizes
           .filter((size) => size.roomType === requirement.roomType)
           .map((size) => size.size),
-        relations: metadata.roomRelations.filter(
-          (relation) => relation.sourceRoomType === requirement.roomType,
-        ),
       }))
       .filter((room) => room.sizes.length > 0);
   }, [metadata]);
@@ -128,8 +124,7 @@ export const RoomRequirementsDialog = ({
         (lookup.get(`${room.roomType}:${room.size}`) ?? 0) * room.count,
       0,
       ) +
-      metadata.buffers.hallwayArea +
-      metadata.buffers.floorArea;
+      0;
     const availableArea = floorWidth * floorLength;
     if (minimumArea > availableArea) return "impossible" as const;
     if (minimumArea > availableArea * 0.75) return "tight" as const;
@@ -339,16 +334,6 @@ export const RoomRequirementsDialog = ({
                           ? `Required · ${catalogEntry?.minCount}–${catalogEntry?.maxCount}`
                           : `Optional · maximum ${catalogEntry?.maxCount}`}
                       </span>
-                      {(catalogEntry?.relations.length ?? 0) > 0 && (
-                        <span className="mt-1 block text-xs text-slate-400">
-                          {catalogEntry?.relations
-                            .map(
-                              (relation) =>
-                                `${relation.strength === "hard" ? "Connects" : "Prefers"} ${relation.targetRoomTypes.map(roomLabel).join(relation.matchPolicy === "and" ? " and " : " or ")}`,
-                            )
-                            .join(" · ")}
-                        </span>
-                      )}
                     </span>
                   </label>
 

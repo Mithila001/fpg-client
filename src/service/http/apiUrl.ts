@@ -1,14 +1,12 @@
-const apiBaseUrl = import.meta.env.VITE_API_BASE_URL?.trim();
-
-if (!apiBaseUrl) {
-  throw new Error("VITE_API_BASE_URL is required.");
-}
+const apiBaseUrl =
+  import.meta.env.VITE_API_BASE_URL?.trim() || "http://localhost:8000";
+const API_PREFIX = "/api/v1/";
 
 const ensureTrailingSlash = (value: string): string => {
   return value.endsWith("/") ? value : `${value}/`;
 };
 
-export const createApiUrl = (path: string): string => {
+export const createServerUrl = (path: string): string => {
   const browserOrigin =
     typeof window === "undefined" ? undefined : window.location.origin;
 
@@ -16,5 +14,9 @@ export const createApiUrl = (path: string): string => {
     ? new URL(ensureTrailingSlash(apiBaseUrl), browserOrigin)
     : new URL(ensureTrailingSlash(apiBaseUrl));
 
+  if (/^https?:\/\//i.test(path)) return path;
   return new URL(path.replace(/^\/+/, ""), absoluteBaseUrl).toString();
 };
+
+export const createApiUrl = (path: string): string =>
+  createServerUrl(`${API_PREFIX}${path.replace(/^\/+/, "")}`);

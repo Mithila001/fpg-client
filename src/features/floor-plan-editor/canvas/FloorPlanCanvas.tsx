@@ -143,6 +143,20 @@ export const FloorPlanCanvas = ({
         </div>
       )}
 
+      <div className="pointer-events-none absolute bottom-3 left-3 flex items-end gap-3 rounded-xl border border-slate-200/80 bg-white/90 px-3 py-2 text-[10px] font-semibold text-slate-600 shadow-sm backdrop-blur">
+        <span className="flex flex-col items-center text-indigo-700">
+          <span className="text-sm leading-none">↑</span>
+          <span>FRONT · −Y</span>
+        </span>
+        <span className="flex flex-col gap-1">
+          <span
+            className="h-1 border-x border-b border-slate-700"
+            style={{ width: `${Math.max(18, Math.min(100, viewport.scale * 10))}px` }}
+          />
+          <span>1 meter</span>
+        </span>
+      </div>
+
       {overlay}
     </div>
   );

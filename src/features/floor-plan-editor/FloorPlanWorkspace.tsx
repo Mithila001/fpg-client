@@ -33,6 +33,7 @@ export const FloorPlanWorkspace = ({
   noResultMessage = "The generation run completed without a usable floor plan.",
   showGrid = true,
   canvasClassName = "",
+  canvasOverlay: providedCanvasOverlay,
   renderSidePanel,
   footer,
 }: FloorPlanWorkspaceProps) => {
@@ -81,7 +82,7 @@ export const FloorPlanWorkspace = ({
       case "no-result":
         return mergeBounds([landBounds, buildableBounds, usableBounds]);
       case "generating":
-        return candidateBounds ?? hintBounds ?? landBounds;
+        return mergeBounds([landBounds, buildableBounds, usableBounds, candidateBounds, hintBounds]);
       case "final-plan":
         return finalBounds ?? landBounds;
       default:
@@ -149,7 +150,8 @@ export const FloorPlanWorkspace = ({
     ) : null;
 
   const canvasOverlay =
-    renderSidePanel === undefined
+    providedCanvasOverlay ??
+    (renderSidePanel === undefined
       ? phase === "generating"
         ? (
             <ProcessingOverlay
@@ -168,14 +170,14 @@ export const FloorPlanWorkspace = ({
                 />
               )
             : null
-      : null;
+      : null);
 
   const canvas = (
     <FloorPlanCanvas
       bounds={bounds}
       fitKey={fitKey}
       interaction="navigate"
-      showGrid={phase !== "generating" && showGrid}
+      showGrid={showGrid}
       overlay={canvasOverlay}
       className={canvasClassName}
       onPointerMove={
@@ -223,11 +225,17 @@ export const FloorPlanWorkspace = ({
             );
           case "generating":
             return (
-              <GenerationScene
-                hints={hints}
-                candidatePlan={candidatePlan}
-                scale={scale}
-              />
+              <>
+                <BuildableReviewScene
+                  landBoundary={landBoundary}
+                  road={editor.state.document.road}
+                  result={buildableResult}
+                  scale={scale}
+                  showDimensions={false}
+                  muted
+                />
+                <GenerationScene hints={hints} candidatePlan={candidatePlan} scale={scale} />
+              </>
             );
           case "final-plan":
             return finalPlan ? (

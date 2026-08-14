@@ -1,489 +1,172 @@
-import {
-  useRef,
-  type ChangeEvent,
-  type KeyboardEvent,
-  type ReactNode,
-} from "react";
+import type { ChangeEvent, ReactNode } from "react";
 import { formatProjectArea, formatProjectLength } from "../../../measurement";
-import type {
-  BuildableSpaceResult,
-  RoadType,
-  WorkspaceMetadata,
-} from "../../../types";
-import type { FloorPlanEditorSnapshot } from "../../floor-plan-editor";
-import type {
-  FloorPlanRequirements,
-  WorkflowActivity,
-  WorkflowErrorInfo,
-  WorkflowTab,
-} from "../workflow.types";
+import type { BuildableSpaceResult, RoadType, WorkspaceMetadata } from "../../../types";
+import type { FloorPlanRequirements, WorkflowErrorInfo, WorkflowTab } from "../workflow.types";
+import type { GenerationRunState } from "../generation-state";
 
 interface WorkflowSidebarProps {
-  activeTab: WorkflowTab;
-  snapshot: FloorPlanEditorSnapshot;
-  landArea: number;
-  targetAreaInput: string;
-  roadType: RoadType;
-  metadata: WorkspaceMetadata;
-  buildableResult: BuildableSpaceResult | null;
-  aspectRatio: string;
-  requirements: FloorPlanRequirements | null;
-  activity: WorkflowActivity;
-  generationMessage: string;
-  jobId: string | null;
-  error: WorkflowErrorInfo | null;
-  finalScoring: { totalScore: number; passedCritical: boolean } | null;
-  progress: { current?: number; total?: number; label?: string } | null;
-  hasFinalPlan: boolean;
-  noResult: boolean;
-  landEditorControls: ReactNode;
-  viewerControls: ReactNode;
-  onTabChange: (tab: WorkflowTab) => void;
-  onTargetAreaInputChange: (value: string) => void;
-  onApplyTargetArea: () => void;
-  onRoadTypeChange: (roadType: RoadType) => void;
-  onFindBuildableSpace: () => void;
-  onEditLand: () => void;
-  onAspectRatioChange: (value: string) => void;
-  onOpenRequirements: () => void;
-  onGenerate: () => void;
-  onCancelGeneration: () => void;
-  onResetGeneration: () => void;
+  activeTab: WorkflowTab; metadata: WorkspaceMetadata; buildableResult: BuildableSpaceResult | null;
+  requirements: FloorPlanRequirements | null; roadType: RoadType; targetAreaInput: string;
+  landArea: number; aspectRatio: string; generation: GenerationRunState; error: WorkflowErrorInfo | null;
+  landEditorControls: ReactNode; viewerControls: ReactNode; landValid: boolean; findingBuildable: boolean;
+  onTabChange: (tab: WorkflowTab) => void; onTargetAreaInputChange: (value: string) => void;
+  onApplyTargetArea: () => void; onRoadTypeChange: (value: RoadType) => void;
+  onFindBuildableSpace: () => void; onEditLand: () => void; onAspectRatioChange: (value: string) => void;
+  onOpenRequirements: () => void; onGenerate: () => void; onCancel: () => void; onReset: () => void;
 }
+const running = new Set(["queued", "running", "cancellation_requested"]);
+const label = (value: string) => value.replaceAll("_", " ").replace(/\b\w/g, (letter) => letter.toUpperCase());
 
-const sectionClassName =
-  "rounded-xl border border-slate-200 bg-white p-4 shadow-sm";
-
-export const WorkflowSidebar = ({
-  activeTab,
-  snapshot,
-  landArea,
-  targetAreaInput,
-  roadType,
-  metadata,
-  buildableResult,
-  aspectRatio,
-  requirements,
-  activity,
-  generationMessage,
-  jobId,
-  error,
-  finalScoring,
-  progress,
-  hasFinalPlan,
-  noResult,
-  landEditorControls,
-  viewerControls,
-  onTabChange,
-  onTargetAreaInputChange,
-  onApplyTargetArea,
-  onRoadTypeChange,
-  onFindBuildableSpace,
-  onEditLand,
-  onAspectRatioChange,
-  onOpenRequirements,
-  onGenerate,
-  onCancelGeneration,
-  onResetGeneration,
-}: WorkflowSidebarProps) => {
-  const landTabRef = useRef<HTMLButtonElement>(null);
-  const generateTabRef = useRef<HTMLButtonElement>(null);
-  const busy =
-    activity === "finding-buildable-space" ||
-    activity === "generating" ||
-    activity === "cancelling";
-  const canFindBuildable =
-    snapshot.isValid && snapshot.value.roads.length === 1 && !busy;
-  const canConfigure = buildableResult !== null && !busy;
-  const canGenerate = requirements !== null && buildableResult !== null && !busy;
-  const progressPercent =
-    progress?.current !== undefined &&
-    progress.total !== undefined &&
-    progress.total > 0
-      ? Math.min(100, Math.max(0, (progress.current / progress.total) * 100))
-      : null;
-
-  const handleTabKeyDown = (
-    event: KeyboardEvent<HTMLButtonElement>,
-    tab: WorkflowTab,
-  ) => {
-    if (!["ArrowLeft", "ArrowRight", "Home", "End"].includes(event.key)) return;
-    event.preventDefault();
-    const nextTab =
-      event.key === "Home"
-        ? "land"
-        : event.key === "End"
-          ? "generate"
-          : tab === "land"
-            ? "generate"
-            : "land";
-    onTabChange(nextTab);
-    (nextTab === "land" ? landTabRef : generateTabRef).current?.focus();
-  };
-
+export const WorkflowSidebar = (props: WorkflowSidebarProps) => {
+  const busy = props.findingBuildable || running.has(props.generation.view);
+  const progress = props.generation.trialNumber !== null && props.generation.trialLimit
+    ? Math.min(100, (props.generation.trialNumber / props.generation.trialLimit) * 100) : null;
   return (
-    <aside className="flex min-h-0 flex-col border-t border-slate-200 bg-slate-50 lg:h-full lg:border-l lg:border-t-0">
-      <div
-        role="tablist"
-        aria-label="Floor-plan workflow"
-        className="grid shrink-0 grid-cols-2 border-b border-slate-200 bg-white p-2"
-      >
-        {(["land", "generate"] as const).map((tab) => {
-          const active = activeTab === tab;
-          return (
-            <button
-              key={tab}
-              ref={tab === "land" ? landTabRef : generateTabRef}
-              id={`${tab}-tab`}
-              type="button"
-              role="tab"
-              aria-selected={active}
-              aria-controls={`${tab}-panel`}
-              tabIndex={active ? 0 : -1}
-              onClick={() => onTabChange(tab)}
-              onKeyDown={(event) => handleTabKeyDown(event, tab)}
-              className={`rounded-lg px-4 py-3 text-sm font-bold transition-colors ${
-                active
-                  ? "bg-slate-900 text-white shadow-sm"
-                  : "text-slate-600 hover:bg-slate-100 hover:text-slate-900"
-              }`}
-            >
-              {tab === "land" ? "Land" : "Generate"}
+    <aside className="min-h-0 overflow-y-auto border-l border-slate-200 bg-white lg:h-full">
+      <div className="sticky top-0 z-10 border-b border-slate-200 bg-white/95 p-4 backdrop-blur">
+        <p className="text-[11px] font-bold uppercase tracking-[0.2em] text-indigo-600">Design workspace</p>
+        <div className="mt-3 grid grid-cols-2 rounded-xl bg-slate-100 p-1">
+          {(["land", "generate"] as const).map((tab) => (
+            <button key={tab} type="button" onClick={() => props.onTabChange(tab)}
+              className={`rounded-lg px-3 py-2 text-sm font-bold transition ${props.activeTab === tab ? "bg-white text-slate-950 shadow-sm" : "text-slate-500"}`}>
+              {tab === "land" ? "1 · Land" : "2 · Generate"}
             </button>
-          );
-        })}
+          ))}
+        </div>
       </div>
 
-      <div className="min-h-0 flex-1 overflow-y-auto p-4">
-        <div
-          id="land-panel"
-          role="tabpanel"
-          aria-labelledby="land-tab"
-          hidden={activeTab !== "land"}
-          className="space-y-4"
-        >
-          {landEditorControls}
-
-          <section className={sectionClassName}>
-            <div className="flex items-center justify-between gap-3">
-              <div>
-                <h2 className="text-sm font-bold text-slate-900">Land setup</h2>
-                <p className="mt-1 text-xs text-slate-500">
-                  Define a valid convex boundary and one entry road.
-                </p>
+      <div className="space-y-4 p-4">
+        {props.activeTab === "land" ? (
+          <>
+            <section className="rounded-2xl border border-slate-200 p-4">
+              <div className="flex items-center justify-between">
+                <h2 className="font-bold text-slate-950">Parcel geometry</h2>
+                <span className="rounded-full bg-indigo-50 px-2 py-1 text-[10px] font-bold text-indigo-700">
+                  {formatProjectArea(props.landArea, "square-meter")}
+                </span>
               </div>
-              <span className="rounded-full bg-indigo-50 px-2.5 py-1 text-xs font-bold text-indigo-700">
-                {snapshot.value.landBoundary.points.length} vertices
-              </span>
-            </div>
-
-            <div className="mt-4 rounded-lg bg-slate-50 p-3 text-sm">
-              <span className="block text-xs text-slate-500">Current area</span>
-              <strong className="mt-1 block text-slate-900">
-                {formatProjectArea(landArea, "square-meter")}
-              </strong>
-            </div>
-
-            <label className="mt-4 block text-xs font-semibold text-slate-600">
-              Target land area (m²)
-              <div className="mt-1.5 flex gap-2">
-                <input
-                  type="number"
-                  min="1"
-                  step="1"
-                  value={targetAreaInput}
-                  onChange={(event: ChangeEvent<HTMLInputElement>) =>
-                    onTargetAreaInputChange(event.target.value)
-                  }
-                  disabled={busy}
-                  className="min-w-0 flex-1 rounded-lg border border-slate-300 px-3 py-2 text-sm outline-none focus:border-indigo-500 focus:ring-2 focus:ring-indigo-100 disabled:bg-slate-100"
-                />
-                <button
-                  type="button"
-                  onClick={onApplyTargetArea}
-                  disabled={busy}
-                  className="rounded-lg border border-slate-300 px-3 py-2 text-sm font-semibold text-slate-700 hover:bg-slate-50 disabled:opacity-50"
-                >
-                  Apply
-                </button>
-              </div>
-            </label>
-
-            <label className="mt-4 block text-xs font-semibold text-slate-600">
-              Road type
-              <select
-                value={roadType}
-                onChange={(event: ChangeEvent<HTMLSelectElement>) =>
-                  onRoadTypeChange(event.target.value as RoadType)
-                }
-                disabled={busy}
-                className="mt-1.5 w-full rounded-lg border border-slate-300 bg-white px-3 py-2.5 text-sm disabled:bg-slate-100"
-              >
-                {metadata.roadTypes.map((option) => (
-                  <option key={option.value} value={option.value}>
-                    {option.displayName}
-                  </option>
-                ))}
-              </select>
-            </label>
-
-            <div className="mt-3 rounded-lg border border-slate-200 bg-slate-50 px-3 py-2 text-xs text-slate-600">
-              {snapshot.value.roads.length === 1
-                ? `Road attached to edge ${snapshot.value.roads[0].boundaryEdgeIndex + 1}.`
-                : "Choose Place road in the editor controls, then click near a boundary edge."}
-            </div>
-
-            {!snapshot.isValid && (
-              <div className="mt-3 rounded-lg border border-rose-200 bg-rose-50 px-3 py-2 text-xs font-medium text-rose-700">
-                {snapshot.issues[0]?.message ?? "The land boundary is invalid."}
-              </div>
-            )}
-
-            <button
-              type="button"
-              onClick={onFindBuildableSpace}
-              disabled={!canFindBuildable}
-              className="mt-4 w-full rounded-xl bg-slate-900 px-4 py-3 text-sm font-bold text-white hover:bg-slate-800 disabled:cursor-not-allowed disabled:opacity-40"
-            >
-              {activity === "finding-buildable-space"
-                ? "Finding buildable space…"
-                : "Find buildable space"}
-            </button>
-          </section>
-
-          {buildableResult && (
-            <section className="rounded-xl border border-emerald-200 bg-emerald-50 p-4 text-sm text-emerald-900">
-              <h2 className="font-bold">Usable rectangle ready</h2>
-              <p className="mt-1 text-xs leading-5 text-emerald-700">
-                {formatProjectLength(buildableResult.usableLand.width, "meter")} ×{" "}
-                {formatProjectLength(buildableResult.usableLand.length, "meter")}
-                <br />
-                {formatProjectArea(
-                  buildableResult.usableLand.area,
-                  "square-meter",
-                )}
-              </p>
-              <button
-                type="button"
-                onClick={onEditLand}
-                disabled={busy}
-                className="mt-3 text-xs font-bold underline underline-offset-2 disabled:opacity-50"
-              >
-                Edit land again
-              </button>
+              <label className="mt-4 block text-xs font-semibold text-slate-600">Target area (m²)
+                <div className="mt-1.5 flex gap-2">
+                  <input type="number" min="1" step="1" value={props.targetAreaInput}
+                    onChange={(event) => props.onTargetAreaInputChange(event.target.value)}
+                    disabled={busy || props.buildableResult !== null}
+                    className="min-w-0 flex-1 rounded-xl border border-slate-300 px-3 py-2.5 text-sm" />
+                  <button type="button" onClick={props.onApplyTargetArea} disabled={busy || props.buildableResult !== null}
+                    className="rounded-xl border border-slate-300 px-3 text-xs font-bold disabled:opacity-40">Apply</button>
+                </div>
+              </label>
+              <label className="mt-3 block text-xs font-semibold text-slate-600">Entry road
+                <select value={props.roadType} disabled={busy || props.buildableResult !== null}
+                  onChange={(event: ChangeEvent<HTMLSelectElement>) => props.onRoadTypeChange(event.target.value as RoadType)}
+                  className="mt-1.5 w-full rounded-xl border border-slate-300 bg-white px-3 py-2.5 text-sm">
+                  {props.metadata.roadTypes.map((road) => <option key={road.value} value={road.value}>{road.displayName}</option>)}
+                </select>
+              </label>
             </section>
-          )}
-        </div>
-
-        <div
-          id="generate-panel"
-          role="tabpanel"
-          aria-labelledby="generate-tab"
-          hidden={activeTab !== "generate"}
-          className="space-y-4"
-        >
-          <section className={sectionClassName}>
-            <h2 className="text-sm font-bold text-slate-900">
-              Floor-plan generation
-            </h2>
-            <p className="mt-1 text-xs text-slate-500">
-              Configure server-supported rooms, then follow the live generation
-              stream.
-            </p>
-
-            {!buildableResult ? (
-              <div className="mt-4 rounded-lg border border-amber-200 bg-amber-50 px-3 py-2 text-xs text-amber-800">
-                Find the buildable space in the Land tab first.
-              </div>
+            {props.landEditorControls}
+            {props.buildableResult ? (
+              <section className="rounded-2xl border border-emerald-200 bg-emerald-50 p-4 text-sm text-emerald-900">
+                <h2 className="font-bold">Buildable envelope ready</h2>
+                <p className="mt-1 text-xs">{formatProjectLength(props.buildableResult.usableLand.width, "meter")} × {formatProjectLength(props.buildableResult.usableLand.length, "meter")}</p>
+                <div className="mt-3 flex gap-2">
+                  <button type="button" onClick={() => props.onTabChange("generate")} className="flex-1 rounded-xl bg-emerald-700 px-3 py-2 text-xs font-bold text-white">Continue</button>
+                  <button type="button" onClick={props.onEditLand} className="rounded-xl border border-emerald-300 px-3 py-2 text-xs font-bold">Edit</button>
+                </div>
+              </section>
             ) : (
-              <div className="mt-4 rounded-lg bg-slate-50 p-3 text-xs text-slate-600">
-                Available floor:{" "}
-                <strong className="text-slate-900">
-                  {formatProjectLength(
-                    buildableResult.usableLand.width,
-                    "meter",
-                  )}{" "}
-                  ×{" "}
-                  {formatProjectLength(
-                    buildableResult.usableLand.length,
-                    "meter",
-                  )}
-                </strong>
-              </div>
+              <button type="button" onClick={props.onFindBuildableSpace} disabled={!props.landValid || busy}
+                className="w-full rounded-xl bg-slate-950 px-4 py-3 text-sm font-bold text-white disabled:opacity-40">
+                {props.findingBuildable ? "Calculating setbacks…" : "Find buildable space"}
+              </button>
             )}
-
-            <label className="mt-4 block text-xs font-semibold text-slate-600">
-              Aspect ratio
-              <select
-                value={aspectRatio}
-                onChange={(event: ChangeEvent<HTMLSelectElement>) =>
-                  onAspectRatioChange(event.target.value)
-                }
-                disabled={!buildableResult || busy}
-                className="mt-1.5 w-full rounded-lg border border-slate-300 bg-white px-3 py-2.5 text-sm disabled:bg-slate-100 disabled:text-slate-400"
-              >
-                {metadata.compatibleAspectRatios.map((option) => (
-                  <option key={option.label} value={option.label}>
-                    {option.label}
-                  </option>
-                ))}
-              </select>
-            </label>
-
-            <button
-              type="button"
-              onClick={onOpenRequirements}
-              disabled={!canConfigure}
-              className="mt-4 w-full rounded-xl border border-indigo-200 bg-indigo-50 px-4 py-2.5 text-sm font-bold text-indigo-700 hover:bg-indigo-100 disabled:cursor-not-allowed disabled:opacity-40"
-            >
-              {requirements ? "Edit room requirements" : "Configure rooms"}
-            </button>
-
-            <div className="mt-3 rounded-xl border border-slate-200 bg-slate-50 p-3">
-              <p className="text-xs font-bold uppercase tracking-wide text-slate-500">
-                Requirements
-              </p>
-              {requirements ? (
+          </>
+        ) : (
+          <>
+            <section className="rounded-2xl border border-slate-200 p-4">
+              <h2 className="font-bold text-slate-950">Plan requirements</h2>
+              {!props.buildableResult ? <p className="mt-2 rounded-xl bg-amber-50 p-3 text-xs text-amber-800">Complete the land step first.</p> : (
                 <>
-                  <p className="mt-2 text-xs leading-5 text-slate-700">
-                    {requirements.summary}
-                  </p>
-                  <p className="mt-2 text-xs font-semibold text-slate-900">
-                    Floor{" "}
-                    {formatProjectLength(requirements.floorWidth, "meter")} ×{" "}
-                    {formatProjectLength(requirements.floorLength, "meter")}
-                  </p>
+                  <label className="mt-4 block text-xs font-semibold text-slate-600">Aspect ratio
+                    <select value={props.aspectRatio} disabled={busy}
+                      onChange={(event) => props.onAspectRatioChange(event.target.value)}
+                      className="mt-1.5 w-full rounded-xl border border-slate-300 bg-white px-3 py-2.5 text-sm">
+                      {props.metadata.compatibleAspectRatios.map((ratio) => <option key={ratio.label}>{ratio.label}</option>)}
+                    </select>
+                  </label>
+                  <button type="button" onClick={props.onOpenRequirements} disabled={busy}
+                    className="mt-3 w-full rounded-xl border border-indigo-200 bg-indigo-50 px-3 py-2.5 text-sm font-bold text-indigo-700">
+                    {props.requirements ? "Edit room requirements" : "Configure rooms"}
+                  </button>
+                  {props.requirements && <p className="mt-3 rounded-xl bg-slate-50 p-3 text-xs leading-5 text-slate-600">{props.requirements.summary}</p>}
                 </>
-              ) : (
-                <p className="mt-2 text-xs text-slate-500">Not configured.</p>
               )}
-            </div>
+            </section>
 
-            {activity === "generating" || activity === "cancelling" ? (
-              <button
-                type="button"
-                onClick={onCancelGeneration}
-                disabled={!jobId || activity === "cancelling"}
-                className="mt-4 w-full rounded-xl bg-rose-600 px-4 py-3 text-sm font-bold text-white hover:bg-rose-700 disabled:opacity-50"
-              >
-                {activity === "cancelling"
-                  ? "Requesting cancellation…"
-                  : "Stop generation"}
-              </button>
-            ) : (
-              <button
-                type="button"
-                onClick={onGenerate}
-                disabled={!canGenerate}
-                className="mt-4 w-full rounded-xl bg-indigo-600 px-4 py-3 text-sm font-bold text-white shadow-sm hover:bg-indigo-700 disabled:cursor-not-allowed disabled:opacity-40"
-              >
-                {hasFinalPlan ? "Generate again" : "Generate floor plan"}
-              </button>
+            {props.generation.view !== "idle" && (
+              <section className="rounded-2xl border border-slate-200 p-4" aria-live="polite">
+                <div className="flex items-center justify-between gap-2">
+                  <h2 className="font-bold text-slate-950">Live generation</h2>
+                  <span className={`rounded-full px-2 py-1 text-[10px] font-bold uppercase ${props.generation.connection === "open" ? "bg-emerald-50 text-emerald-700" : props.generation.connection === "reconnecting" ? "bg-amber-50 text-amber-700" : "bg-slate-100 text-slate-600"}`}>
+                    {props.generation.connection}
+                  </span>
+                </div>
+                <p className="mt-2 text-xs leading-5 text-slate-600">{props.generation.message || label(props.generation.view)}</p>
+                {progress !== null && <div className="mt-3 h-1.5 overflow-hidden rounded-full bg-slate-100"><div className="h-full bg-indigo-600 transition-[width]" style={{ width: `${progress}%` }} /></div>}
+                {props.generation.warning && <p className="mt-3 rounded-xl bg-amber-50 p-3 text-xs text-amber-800">{props.generation.warning}</p>}
+                <ol className="mt-4 max-h-64 space-y-3 overflow-y-auto border-l border-slate-200 pl-4">
+                  {props.generation.timeline.slice().reverse().map((entry) => (
+                    <li key={entry.sequence} className="relative text-xs">
+                      <span className={`absolute -left-[20.5px] top-1 h-2 w-2 rounded-full ${entry.severity === "error" ? "bg-rose-500" : entry.severity === "warning" ? "bg-amber-500" : entry.severity === "success" ? "bg-emerald-500" : "bg-indigo-400"}`} />
+                      <p className="font-semibold text-slate-700">{entry.message}</p>
+                      <p className="mt-0.5 text-[10px] text-slate-400">#{entry.sequence} · {label(entry.stage)}{entry.trialNumber ? ` · Trial ${entry.trialNumber}` : ""}</p>
+                    </li>
+                  ))}
+                </ol>
+              </section>
             )}
-          </section>
-
-          {(generationMessage || progress) && (
-            <section className={sectionClassName} aria-live="polite">
-              <h2 className="text-sm font-bold text-slate-900">Generation status</h2>
-              {generationMessage && (
-                <p className="mt-2 text-xs leading-5 text-slate-600">
-                  {generationMessage}
-                </p>
-              )}
-              {progress && (
-                <div className="mt-3">
-                  <div className="flex justify-between gap-2 text-xs text-slate-500">
-                    <span>{progress.label ?? "Progress"}</span>
-                    {progress.current !== undefined &&
-                      progress.total !== undefined && (
-                        <span>
-                          {progress.current}/{progress.total}
-                        </span>
-                      )}
+            {(props.generation.status?.result || props.generation.status?.bestAvailable) && (() => {
+              const result = props.generation.status?.result ?? props.generation.status?.bestAvailable;
+              if (!result) return null;
+              return (
+                <section className="rounded-2xl border border-indigo-200 bg-indigo-50 p-4 text-sm text-indigo-950">
+                  <div className="flex items-start justify-between gap-3">
+                    <div>
+                      <p className="text-[10px] font-black uppercase tracking-[0.18em] text-indigo-600">{result.classification} plan</p>
+                      <h2 className="mt-1 font-black">Score {result.scoring.totalScore.toFixed(1)}</h2>
+                    </div>
+                    <span className={`rounded-full px-2 py-1 text-[10px] font-bold ${result.scoring.passedCritical ? "bg-emerald-100 text-emerald-700" : "bg-rose-100 text-rose-700"}`}>
+                      {result.scoring.passedCritical ? "Critical checks passed" : "Critical check failed"}
+                    </span>
                   </div>
-                  {progressPercent !== null && (
-                    <div className="mt-1.5 h-2 overflow-hidden rounded-full bg-slate-200">
-                      <div
-                        className="h-full rounded-full bg-indigo-600 transition-[width]"
-                        style={{ width: `${progressPercent}%` }}
-                      />
+                  {result.scoring.criticalFailure && (
+                    <div className="mt-3 rounded-xl border border-rose-200 bg-white/70 p-3 text-xs text-rose-800">
+                      <strong>{result.scoring.criticalFailure.code}</strong>
+                      <p className="mt-1">{result.scoring.criticalFailure.message}</p>
                     </div>
                   )}
-                </div>
-              )}
-            </section>
-          )}
-
-          {noResult && (
-            <section className="rounded-xl border border-amber-200 bg-amber-50 p-4 text-xs leading-5 text-amber-800">
-              The generation run completed without a usable floor plan. Adjust
-              the requirements and try again.
-            </section>
-          )}
-
-          {finalScoring && (
-            <section className="rounded-xl border border-indigo-200 bg-indigo-50 p-4 text-xs text-indigo-800">
-              Final score: <strong>{finalScoring.totalScore.toFixed(2)}</strong>
-              {finalScoring.passedCritical
-                ? " · Critical checks passed"
-                : " · Critical checks failed"}
-            </section>
-          )}
-
-          {viewerControls}
-
-          {(hasFinalPlan || requirements) && !busy && (
-            <button
-              type="button"
-              onClick={onResetGeneration}
-              className="w-full rounded-lg border border-slate-300 bg-white px-3 py-2 text-xs font-bold text-slate-600 hover:bg-slate-50"
-            >
-              Clear generation result
-            </button>
-          )}
-        </div>
-
-        {error && (
-          <section
-            className="mt-4 rounded-xl border border-rose-200 bg-rose-50 p-4 text-sm text-rose-800 shadow-sm"
-            role="alert"
-          >
-            <strong className="block">Request failed</strong>
-            <span className="mt-1 block text-xs leading-5">{error.message}</span>
-            {(error.code || error.stage || error.flowId) && (
-              <dl className="mt-2 grid gap-1 text-xs">
-                {error.code && (
-                  <div>
-                    <dt className="inline font-semibold">Code: </dt>
-                    <dd className="inline">{error.code}</dd>
-                  </div>
-                )}
-                {error.stage && (
-                  <div>
-                    <dt className="inline font-semibold">Stage: </dt>
-                    <dd className="inline">{error.stage}</dd>
-                  </div>
-                )}
-                {error.flowId && (
-                  <div>
-                    <dt className="inline font-semibold">Flow ID: </dt>
-                    <dd className="inline break-all">{error.flowId}</dd>
-                  </div>
-                )}
-              </dl>
+                </section>
+              );
+            })()}
+            {props.viewerControls}
+            {running.has(props.generation.view) ? (
+              <button type="button" onClick={props.onCancel} disabled={props.generation.view === "cancellation_requested"}
+                className="w-full rounded-xl bg-rose-600 px-4 py-3 text-sm font-bold text-white disabled:opacity-50">
+                {props.generation.view === "cancellation_requested" ? "Cancellation requested…" : "Stop generation"}
+              </button>
+            ) : (
+              <button type="button" onClick={props.onGenerate} disabled={!props.requirements || !props.buildableResult}
+                className="w-full rounded-xl bg-indigo-600 px-4 py-3 text-sm font-bold text-white shadow-lg shadow-indigo-200 disabled:opacity-40">
+                {props.generation.view === "idle" ? "Generate floor plan" : "Generate again"}
+              </button>
             )}
-            {error.details !== undefined && (
-              <details className="mt-3 text-xs">
-                <summary className="cursor-pointer font-semibold">
-                  Technical details
-                </summary>
-                <pre className="mt-2 max-h-40 overflow-auto whitespace-pre-wrap break-words rounded-lg bg-white/60 p-2 font-mono text-[11px]">
-                  {JSON.stringify(error.details, null, 2)}
-                </pre>
-              </details>
-            )}
-          </section>
+            {props.generation.view !== "idle" && !running.has(props.generation.view) &&
+              <button type="button" onClick={props.onReset} className="w-full rounded-xl border border-slate-300 px-3 py-2 text-xs font-bold text-slate-600">Clear result</button>}
+          </>
         )}
+        {props.error && <section role="alert" className="rounded-2xl border border-rose-200 bg-rose-50 p-4 text-xs text-rose-800">
+          <strong className="block text-sm">Request failed</strong><span className="mt-1 block">{props.error.message}</span>
+          {props.error.code && <code className="mt-2 block">{props.error.code}</code>}
+        </section>}
       </div>
     </aside>
   );

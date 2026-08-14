@@ -1,5 +1,3 @@
-import type { GenerationHttpErrorBody } from "./floor-plan.api.types";
-
 export type FloorPlanServiceErrorKind =
   | "invalid_request"
   | "transport"
@@ -20,7 +18,7 @@ export interface FloorPlanServiceErrorOptions {
   stage?: string;
   eventName?: string;
   rawData?: string;
-  details?: GenerationHttpErrorBody | unknown;
+  details?: unknown;
   cause?: unknown;
 }
 
@@ -32,7 +30,7 @@ export class FloorPlanServiceError extends Error {
   readonly stage?: string;
   readonly eventName?: string;
   readonly rawData?: string;
-  readonly details?: GenerationHttpErrorBody | unknown;
+  readonly details?: unknown;
   readonly originalCause?: unknown;
 
   constructor(options: FloorPlanServiceErrorOptions) {

@@ -1,9 +1,14 @@
+import { lazy, Suspense } from "react";
 import { BrowserRouter, Navigate, Route, Routes } from "react-router-dom";
 import Layout from "./components/Layout";
 import Home from "./pages/Home";
-import FloorPlanWorkspacePage from "./pages/FloorPlanWorkspacePage";
-import ApiTestPage from "./pages/dev/ApiTestPage";
-import FloorPlanEditorTestPage from "./pages/dev/FloorPlanEditorTestPage";
+const FloorPlanWorkspacePage = lazy(() => import("./pages/FloorPlanWorkspacePage"));
+
+const WorkspaceFallback = () => (
+  <div className="flex flex-1 items-center justify-center bg-slate-950 text-sm font-semibold text-slate-300">
+    Loading design workspace…
+  </div>
+);
 
 function App() {
   return (
@@ -11,11 +16,9 @@ function App() {
       <Routes>
         <Route path="/" element={<Layout />}>
           <Route index element={<Home />} />
-          <Route path="workspace" element={<FloorPlanWorkspacePage />} />
+          <Route path="workspace" element={<Suspense fallback={<WorkspaceFallback />}><FloorPlanWorkspacePage /></Suspense>} />
           <Route path="canvas" element={<Navigate to="/workspace" replace />} />
           <Route path="workspace-v2" element={<Navigate to="/workspace" replace />} />
-          <Route path="api-test" element={<ApiTestPage />} />
-          <Route path="editor-test" element={<FloorPlanEditorTestPage />} />
         </Route>
       </Routes>
     </BrowserRouter>

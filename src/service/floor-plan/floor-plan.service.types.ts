@@ -1,37 +1,10 @@
-import type {
-  FloorPlanGenerationResult,
-  GenerationSseEvent,
-} from "../../types";
+import type { GenerationConnectionState, GenerationSseEvent } from "../../types";
 
-export type FloorPlanStreamCloseReason =
-  | "completed"
-  | "generation_error"
-  | "cancelled"
-  | "aborted";
-
-export interface FloorPlanStreamHandlers {
-  onOpen?: (jobId: string | null) => void;
-  onJobId?: (jobId: string) => void;
-  onEvent: (event: GenerationSseEvent) => void | Promise<void>;
-  onClose?: (reason: FloorPlanStreamCloseReason) => void;
+export interface FloorPlanEventSubscription { readonly closed: boolean; close(): void }
+export interface FloorPlanEventHandlers {
+  onConnectionChange?: (state: GenerationConnectionState) => void;
+  onEvent: (event: GenerationSseEvent) => void;
   onError?: (error: Error) => void;
 }
-
-export interface FloorPlanRequestOptions {
-  signal?: AbortSignal;
-  headers?: HeadersInit;
-  fetchImplementation?: typeof fetch;
-}
-
-export type FloorPlanStreamOptions = FloorPlanRequestOptions;
-
-export interface FloorPlanEventStream {
-  readonly closed: boolean;
-  close(): void;
-}
-
-export interface FloorPlanGenerationSession {
-  readonly jobId: string | null;
-  readonly stream: FloorPlanEventStream;
-  readonly completion: Promise<FloorPlanGenerationResult>;
-}
+export interface FloorPlanRequestOptions { signal?: AbortSignal; fetchImplementation?: typeof fetch }
+export interface FloorPlanEventOptions { eventSourceFactory?: (url: string) => EventSource }

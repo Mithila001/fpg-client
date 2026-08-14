@@ -1,84 +1,29 @@
-import React from "react";
 import { Link, NavLink, Outlet, useLocation } from "react-router-dom";
 
-const Layout: React.FC = () => {
-  const { pathname } = useLocation();
-  const isWorkspace = pathname === "/workspace";
-
+const Layout = () => {
+  const workspace = useLocation().pathname === "/workspace";
   return (
-    <div
-      className={`flex flex-col bg-slate-50 text-slate-900 selection:bg-indigo-100 selection:text-indigo-900 ${
-        isWorkspace
-          ? "min-h-screen lg:h-dvh lg:min-h-0 lg:overflow-hidden"
-          : "min-h-screen"
-      }`}
-    >
-      <header className="sticky top-0 z-50 shrink-0 border-b border-slate-200/60 bg-white/90 shadow-sm backdrop-blur-xl">
-        <nav className="mx-auto flex w-full max-w-7xl items-center justify-between px-4 py-3 sm:px-6">
-          <Link
-            to="/"
-            className="flex items-center gap-2 text-xl font-bold tracking-tight text-slate-900 transition-opacity hover:opacity-80"
-          >
-            <img
-              src="/logo.png"
-              alt="Floor Plan Gen Logo"
-              className="h-8 w-8 object-contain"
-            />
+    <div className={`flex min-h-screen flex-col bg-slate-50 text-slate-900 ${workspace ? "lg:h-dvh lg:min-h-0 lg:overflow-hidden" : ""}`}>
+      <header className="relative z-50 shrink-0 border-b border-white/10 bg-slate-950 text-white">
+        <nav className="mx-auto flex h-16 w-full max-w-[1600px] items-center justify-between px-4 sm:px-6">
+          <Link to="/" className="group flex items-center gap-3">
+            <span className="flex h-9 w-9 items-center justify-center rounded-xl bg-indigo-500 shadow-lg shadow-indigo-950/30">
+              <img src="/logo.png" alt="" className="h-7 w-7 object-contain brightness-0 invert" />
+            </span>
             <span>
-              Floor Plan<span className="text-indigo-600">Gen</span>
+              <span className="block text-sm font-black tracking-tight">Floor Plan Gen</span>
+              <span className="block text-[9px] font-bold uppercase tracking-[0.22em] text-slate-400">Spatial design studio</span>
             </span>
           </Link>
-
-          <ul className="flex items-center gap-2 text-sm font-medium sm:gap-4">
-            <li>
-              <NavLink
-                to="/"
-                end
-                className={({ isActive }) =>
-                  `rounded-full px-3 py-2 transition-colors sm:px-4 ${
-                    isActive
-                      ? "font-semibold text-indigo-600"
-                      : "text-slate-600 hover:bg-slate-100 hover:text-indigo-600"
-                  }`
-                }
-              >
-                Home
-              </NavLink>
-            </li>
-            <li>
-              <NavLink
-                to="/workspace"
-                className={({ isActive }) =>
-                  `rounded-full px-3 py-2 transition-colors sm:px-4 ${
-                    isActive
-                      ? "bg-indigo-600 font-semibold text-white shadow-sm"
-                      : "text-slate-600 hover:bg-slate-100 hover:text-indigo-600"
-                  }`
-                }
-              >
-                Workspace
-              </NavLink>
-            </li>
-          </ul>
+          <div className="flex items-center gap-1 rounded-xl bg-white/5 p-1 text-sm font-semibold">
+            <NavLink to="/" end className={({ isActive }) => `rounded-lg px-3 py-2 transition ${isActive ? "bg-white/10 text-white" : "text-slate-400 hover:text-white"}`}>Overview</NavLink>
+            <NavLink to="/workspace" className={({ isActive }) => `rounded-lg px-3 py-2 transition ${isActive ? "bg-indigo-500 text-white" : "text-slate-400 hover:text-white"}`}>Workspace</NavLink>
+          </div>
         </nav>
       </header>
-
-      <main className="flex min-h-0 grow flex-col">
-        <Outlet />
-      </main>
-
-      {!isWorkspace && (
-        <footer className="border-t border-slate-200 bg-white py-8 text-center text-sm text-slate-500">
-          <div className="mx-auto max-w-7xl px-6">
-            <p>
-              © {new Date().getFullYear()} Floor Plan Generator. All rights
-              reserved.
-            </p>
-          </div>
-        </footer>
-      )}
+      <main className="flex min-h-0 flex-1 flex-col"><Outlet /></main>
+      {!workspace && <footer className="border-t border-slate-200 bg-white px-6 py-8 text-center text-xs text-slate-500">Floor Plan Gen · Project coordinates are rendered at 10 units per meter.</footer>}
     </div>
   );
 };
-
 export default Layout;

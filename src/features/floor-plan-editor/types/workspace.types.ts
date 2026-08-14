@@ -57,6 +57,7 @@ export interface FloorPlanWorkspaceProps extends FloorPlanEditorProps {
   noResultMessage?: string;
   showGrid?: boolean;
   canvasClassName?: string;
+  canvasOverlay?: ReactNode;
   renderSidePanel?: (
     slots: FloorPlanWorkspaceControlSlots,
   ) => ReactNode;

@@ -39,10 +39,12 @@ const RoomShape = ({ room, scale }: { room: FloorPlanRoom; scale: number }) => {
       <Line
         points={flatten(room.boundary.points)}
         closed
-        fill={ROOM_COLORS[room.roomType] ?? "#fafafa"}
+        fill={room.role === "solver_placeholder" ? "#f1f5f9" : (ROOM_COLORS[room.roomType] ?? "#fafafa")}
         stroke="#475569"
         strokeWidth={2.2 / scale}
         lineJoin="round"
+        dash={room.role === "solver_placeholder" ? [7 / scale, 4 / scale] : undefined}
+        opacity={room.role === "solver_placeholder" ? 0.7 : 1}
         listening={false}
       />
       <Rect
@@ -85,6 +87,13 @@ const OpeningShape = ({
     opening.end.y,
   ];
   const isWindow = opening.openingType === "window";
+  const openingColor = isWindow
+    ? "#0284c7"
+    : opening.purpose === "main_entrance"
+      ? "#ea580c"
+      : opening.purpose === "secondary_entrance"
+        ? "#d97706"
+        : "#7c3aed";
 
   return (
     <Fragment>
@@ -97,7 +106,7 @@ const OpeningShape = ({
       />
       <Line
         points={points}
-        stroke={isWindow ? "#0284c7" : "#7c3aed"}
+        stroke={openingColor}
         strokeWidth={(isWindow ? 2.5 : 3) / scale}
         lineCap="round"
         listening={false}

@@ -1,4 +1,4 @@
-export { createApiUrl } from "./apiUrl";
+export { createApiUrl, createServerUrl } from "./apiUrl";
 export { httpClient } from "./httpClient";
 export {
   extractApiFailure,

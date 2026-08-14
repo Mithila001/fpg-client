@@ -1,123 +1,59 @@
-import React from "react";
 import { Link } from "react-router-dom";
 
-const Home: React.FC = () => {
-  return (
-    <div className="relative min-h-full flex flex-col bg-slate-50 overflow-hidden">
-      {/* Decorative background blobs */}
-      <div className="absolute top-0 inset-x-0 h-full overflow-hidden pointer-events-none">
-        <div className="absolute -top-[20%] -left-[10%] w-[50%] h-[50%] rounded-full bg-indigo-200/50 blur-[120px] mix-blend-multiply" />
-        <div className="absolute top-[10%] -right-[10%] w-[40%] h-[40%] rounded-full bg-purple-200/50 blur-[120px] mix-blend-multiply" />
-        <div className="absolute -bottom-[20%] left-[20%] w-[60%] h-[60%] rounded-full bg-sky-200/40 blur-[120px] mix-blend-multiply" />
-      </div>
-
-      <div className="relative z-10 flex flex-col items-center justify-center grow px-6 py-20 text-center max-w-5xl mx-auto w-full">
-        <img src="/logo.png" alt="Logo" className="w-20 h-20 mb-6 drop-shadow-md" />
-        <div className="inline-flex items-center gap-2 px-3 py-1 rounded-full bg-white/60 border border-indigo-100 shadow-sm backdrop-blur-md mb-8">
-          <span className="flex h-2 w-2 rounded-full bg-indigo-500 animate-pulse"></span>
-          <span className="text-sm font-medium text-indigo-900">Version 1.0</span>
-        </div>
-
-        <h1 className="text-5xl md:text-7xl font-extrabold tracking-tight text-slate-900 mb-6 drop-shadow-sm">
-          Explore your dream Floor Plan <br className="hidden md:block" />
-          <span className="text-transparent bg-clip-text bg-linear-to-r from-indigo-600 to-purple-600">
-            in minutes.
+const steps = [
+  ["01", "Shape the site", "Draw a convex parcel, attach its entry road, and let the server calculate setbacks."],
+  ["02", "Set requirements", "Choose only server-supported rooms, sizes, floor limits, and aspect ratios."],
+  ["03", "Watch it evolve", "Follow candidate hints, live plan refinements, scoring, and recoverable solver events."],
+];
+const Home = () => (
+  <div className="overflow-hidden bg-slate-950 text-white">
+    <section className="relative isolate px-6 pb-24 pt-20 sm:pt-28">
+      <div className="absolute inset-0 -z-10 bg-[radial-gradient(circle_at_20%_10%,rgba(99,102,241,.32),transparent_35%),radial-gradient(circle_at_80%_60%,rgba(14,165,233,.18),transparent_32%)]" />
+      <div className="mx-auto grid max-w-7xl items-center gap-16 lg:grid-cols-[1.05fr_.95fr]">
+        <div>
+          <span className="inline-flex items-center gap-2 rounded-full border border-indigo-400/30 bg-indigo-400/10 px-3 py-1.5 text-xs font-bold text-indigo-200">
+            <span className="h-1.5 w-1.5 rounded-full bg-emerald-400" /> API v1 connected workflow
           </span>
-        </h1>
-
-        <p className="mt-4 text-lg md:text-xl text-slate-600 max-w-2xl mx-auto mb-10 leading-relaxed">
-          An advanced floor plan generator using intelligent optimization algorithms. Simply define
-          your land boundaries, configure your room requirements, and explore optimized initial
-          sketch layouts as the algorithm works.
-        </p>
-
-        <div className="flex flex-col sm:flex-row gap-4 justify-center items-center w-full">
-          <Link
-            to="/workspace"
-            className="group relative inline-flex items-center justify-center gap-2 px-8 py-4 text-base font-semibold text-white transition-all duration-200 bg-indigo-600 border border-transparent rounded-full hover:bg-indigo-700 hover:shadow-lg hover:shadow-indigo-500/30 focus:outline-none focus:ring-2 focus:ring-offset-2 focus:ring-indigo-600 w-full sm:w-auto"
-          >
-            <span>Open Workspace</span>
-            <svg
-              className="w-5 h-5 transition-transform group-hover:translate-x-1"
-              fill="none"
-              viewBox="0 0 24 24"
-              stroke="currentColor"
-            >
-              <path
-                strokeLinecap="round"
-                strokeLinejoin="round"
-                strokeWidth={2}
-                d="M13 7l5 5m0 0l-5 5m5-5H6"
-              />
-            </svg>
-          </Link>
+          <h1 className="mt-7 max-w-3xl text-5xl font-black leading-[.98] tracking-[-0.045em] sm:text-7xl">
+            From parcel lines to a plan you can inspect.
+          </h1>
+          <p className="mt-7 max-w-xl text-lg leading-8 text-slate-300">
+            Define the buildable site, configure rooms from live server constraints, and watch generation progress directly on a precise spatial canvas.
+          </p>
+          <div className="mt-9 flex flex-wrap gap-3">
+            <Link to="/workspace" className="rounded-2xl bg-indigo-500 px-6 py-3.5 text-sm font-black shadow-xl shadow-indigo-950/40 transition hover:-translate-y-0.5 hover:bg-indigo-400">Start a floor plan →</Link>
+            <a href="#workflow" className="rounded-2xl border border-white/15 bg-white/5 px-6 py-3.5 text-sm font-bold text-slate-200 hover:bg-white/10">See the workflow</a>
+          </div>
         </div>
-
-        <div className="mt-20 grid grid-cols-1 md:grid-cols-3 gap-8 w-full text-left" id="features">
-          <div className="bg-white/60 backdrop-blur-lg border border-slate-200/60 rounded-2xl p-6 shadow-sm hover:shadow-md transition-shadow">
-            <div className="w-12 h-12 rounded-xl bg-indigo-100 flex items-center justify-center mb-4 text-indigo-600">
-              <svg className="w-6 h-6" fill="none" viewBox="0 0 24 24" stroke="currentColor">
-                <path
-                  strokeLinecap="round"
-                  strokeLinejoin="round"
-                  strokeWidth={2}
-                  d="M4 8V4m0 0h4M4 4l5 5m11-1V4m0 0h-4m4 0l-5 5M4 16v4m0 0h4m-4 0l5-5m11 5l-5-5m5 5v-4m0 4h-4"
-                />
-              </svg>
+        <div className="relative mx-auto aspect-square w-full max-w-lg">
+          <div className="absolute inset-0 rotate-3 rounded-[2.5rem] border border-indigo-400/20 bg-indigo-500/10" />
+          <div className="absolute inset-6 -rotate-2 rounded-[2rem] border border-white/10 bg-slate-900 p-6 shadow-2xl">
+            <div className="grid h-full grid-cols-5 grid-rows-4 gap-2">
+              <div className="col-span-3 row-span-2 rounded-2xl border border-indigo-300/30 bg-indigo-400/20 p-4 text-xs font-bold text-indigo-100">Living room</div>
+              <div className="col-span-2 rounded-2xl border border-amber-300/30 bg-amber-400/20 p-4 text-xs font-bold text-amber-100">Kitchen</div>
+              <div className="col-span-2 rounded-2xl border border-rose-300/30 bg-rose-400/20 p-4 text-xs font-bold text-rose-100">Dining</div>
+              <div className="col-span-2 row-span-2 rounded-2xl border border-sky-300/30 bg-sky-400/20 p-4 text-xs font-bold text-sky-100">Bedroom 1</div>
+              <div className="col-span-3 rounded-2xl border border-emerald-300/30 bg-emerald-400/20 p-4 text-xs font-bold text-emerald-100">Veranda</div>
+              <div className="col-span-2 rounded-2xl border border-cyan-300/30 bg-cyan-400/20 p-4 text-xs font-bold text-cyan-100">Bathroom</div>
+              <div className="col-span-3 rounded-2xl border border-sky-300/30 bg-sky-400/20 p-4 text-xs font-bold text-sky-100">Bedroom 2</div>
             </div>
-            <h3 className="text-xl font-semibold text-slate-900 mb-2">Smart Boundaries</h3>
-            <p className="text-slate-600 text-sm leading-relaxed">
-              Define your land shape and setback requirements. The system computes buildable areas
-              to generate layouts that work within your constraints.
-            </p>
-          </div>
-
-          <div className="bg-white/60 backdrop-blur-lg border border-slate-200/60 rounded-2xl p-6 shadow-sm hover:shadow-md transition-shadow">
-            <div className="w-12 h-12 rounded-xl bg-purple-100 flex items-center justify-center mb-4 text-purple-600">
-              <svg className="w-6 h-6" fill="none" viewBox="0 0 24 24" stroke="currentColor">
-                <path
-                  strokeLinecap="round"
-                  strokeLinejoin="round"
-                  strokeWidth={2}
-                  d="M19 11H5m14 0a2 2 0 012 2v6a2 2 0 01-2 2H5a2 2 0 01-2-2v-6a2 2 0 012-2m14 0V9a2 2 0 00-2-2M5 11V9a2 2 0 002-2m0 0V5a2 2 0 012-2h6a2 2 0 012 2v2M7 7h10"
-                />
-              </svg>
-            </div>
-            <h3 className="text-xl font-semibold text-slate-900 mb-2">Algorithmic Generation</h3>
-            <p className="text-slate-600 text-sm leading-relaxed">
-              Our algorithm intelligently explores different room arrangements based on your
-              requirements, considering factors like light exposure, flow, and structural
-              feasibility.
-            </p>
-          </div>
-
-          <div className="bg-white/60 backdrop-blur-lg border border-slate-200/60 rounded-2xl p-6 shadow-sm hover:shadow-md transition-shadow">
-            <div className="w-12 h-12 rounded-xl bg-sky-100 flex items-center justify-center mb-4 text-sky-600">
-              <svg className="w-6 h-6" fill="none" viewBox="0 0 24 24" stroke="currentColor">
-                <path
-                  strokeLinecap="round"
-                  strokeLinejoin="round"
-                  strokeWidth={2}
-                  d="M15 12a3 3 0 11-6 0 3 3 0 016 0z"
-                />
-                <path
-                  strokeLinecap="round"
-                  strokeLinejoin="round"
-                  strokeWidth={2}
-                  d="M2.458 12C3.732 7.943 7.523 5 12 5c4.478 0 8.268 2.943 9.542 7-1.274 4.057-5.064 7-9.542 7-4.477 0-8.268-2.943-9.542-7z"
-                />
-              </svg>
-            </div>
-            <h3 className="text-xl font-semibold text-slate-900 mb-2">Real-Time Exploration</h3>
-            <p className="text-slate-600 text-sm leading-relaxed">
-              See floor plan options rendered as the algorithm explores layouts. Adjust your
-              requirements and generate new sketch variations that fit your constraints.
-            </p>
           </div>
         </div>
       </div>
-    </div>
-  );
-};
-
+    </section>
+    <section id="workflow" className="border-t border-white/10 bg-white px-6 py-20 text-slate-950">
+      <div className="mx-auto max-w-7xl">
+        <p className="text-xs font-black uppercase tracking-[0.22em] text-indigo-600">One continuous workspace</p>
+        <h2 className="mt-3 max-w-2xl text-3xl font-black tracking-tight sm:text-4xl">Every server decision remains visible.</h2>
+        <div className="mt-10 grid gap-px overflow-hidden rounded-3xl border border-slate-200 bg-slate-200 md:grid-cols-3">
+          {steps.map(([number, title, description]) => <article key={number} className="bg-white p-7">
+            <span className="text-xs font-black text-indigo-600">{number}</span>
+            <h3 className="mt-8 text-lg font-black">{title}</h3>
+            <p className="mt-2 text-sm leading-6 text-slate-600">{description}</p>
+          </article>)}
+        </div>
+      </div>
+    </section>
+  </div>
+);
 export default Home;
