@@ -50,7 +50,19 @@ export const BuildableReviewScene = ({
       </>
     )}
     {showDimensions && (
-      <LandDimensionLayer points={landBoundary} scale={scale} />
+      <>
+        <LandDimensionLayer points={landBoundary} scale={scale} />
+        {result && (
+          <LandDimensionLayer
+            points={result.usableLand.boundary.points}
+            scale={scale}
+            color="#1d4ed8"
+            offsetPx={18}
+            placement="inside"
+            edgeIndexes={[0, 1]}
+          />
+        )}
+      </>
     )}
   </Layer>
 );

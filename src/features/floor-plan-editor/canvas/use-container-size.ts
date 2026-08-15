@@ -5,7 +5,7 @@ interface Size {
   height: number;
 }
 
-export const useContainerSize = (minimumHeight = 420) => {
+export const useContainerSize = (minimumHeight = 320) => {
   const ref = useRef<HTMLDivElement | null>(null);
   const [size, setSize] = useState<Size>({ width: 900, height: minimumHeight });
 
@@ -15,10 +15,11 @@ export const useContainerSize = (minimumHeight = 420) => {
 
     const update = () => {
       const rect = element.getBoundingClientRect();
-      setSize({
-        width: Math.max(320, Math.floor(rect.width)),
-        height: Math.max(minimumHeight, Math.floor(rect.height)),
-      });
+      const width = Math.max(1, Math.floor(rect.width));
+      const height = Math.max(minimumHeight, Math.floor(rect.height));
+      setSize((current) => current.width === width && current.height === height
+        ? current
+        : { width, height });
     };
 
     update();

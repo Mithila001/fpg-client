@@ -24,7 +24,7 @@ export const ViewerToolbar = ({
         }
         className="h-4 w-4 accent-indigo-600"
       />
-      Show dimensions
+      Room &amp; plan dimensions
     </label>
   </div>
 );

@@ -37,10 +37,12 @@ export interface CanvasPointerDownInfo {
 export interface FloorPlanCanvasProps {
   bounds: WorldBounds;
   fitKey: string;
+  fitPadding?: number;
   interaction?: CanvasInteraction;
   showGrid?: boolean;
   blurred?: boolean;
   overlay?: ReactNode;
+  legend?: ReactNode;
   className?: string;
   children: (context: FloorPlanCanvasRenderContext) => ReactNode;
   onPointerMove?: (point: Point | null) => void;

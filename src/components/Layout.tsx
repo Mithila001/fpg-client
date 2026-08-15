@@ -3,19 +3,19 @@ import { Link, NavLink, Outlet, useLocation } from "react-router-dom";
 const Layout = () => {
   const workspace = useLocation().pathname === "/workspace";
   return (
-    <div className={`flex min-h-screen flex-col bg-slate-50 text-slate-900 ${workspace ? "lg:h-dvh lg:min-h-0 lg:overflow-hidden" : ""}`}>
+    <div className={`flex min-h-dvh flex-col bg-slate-50 text-slate-900 ${workspace ? "lg:h-dvh lg:min-h-0 lg:overflow-hidden" : ""}`}>
       <header className="relative z-50 shrink-0 border-b border-white/10 bg-slate-950 text-white">
         <nav className="mx-auto flex h-16 w-full max-w-[1600px] items-center justify-between px-4 sm:px-6">
           <Link to="/" className="group flex items-center gap-3">
             <span className="flex h-9 w-9 items-center justify-center rounded-xl bg-indigo-500 shadow-lg shadow-indigo-950/30">
               <img src="/logo.png" alt="" className="h-7 w-7 object-contain brightness-0 invert" />
             </span>
-            <span>
+            <span className="min-w-0">
               <span className="block text-sm font-black tracking-tight">Floor Plan Gen</span>
-              <span className="block text-[9px] font-bold uppercase tracking-[0.22em] text-slate-400">Spatial design studio</span>
+              <span className="hidden text-[9px] font-bold uppercase tracking-[0.22em] text-slate-400 sm:block">Spatial design studio</span>
             </span>
           </Link>
-          <div className="flex items-center gap-1 rounded-xl bg-white/5 p-1 text-sm font-semibold">
+          <div className="flex items-center gap-0.5 rounded-xl bg-white/5 p-1 text-xs font-semibold sm:gap-1 sm:text-sm">
             <NavLink to="/" end className={({ isActive }) => `rounded-lg px-3 py-2 transition ${isActive ? "bg-white/10 text-white" : "text-slate-400 hover:text-white"}`}>Overview</NavLink>
             <NavLink to="/workspace" className={({ isActive }) => `rounded-lg px-3 py-2 transition ${isActive ? "bg-indigo-500 text-white" : "text-slate-400 hover:text-white"}`}>Workspace</NavLink>
           </div>

@@ -1,11 +1,11 @@
 import { Fragment } from "react";
-import { Line, Rect, Text } from "react-konva";
+import { Circle, Line, Rect, Text } from "react-konva";
 import type {
   FloorPlan,
   FloorPlanOpening,
   FloorPlanRoom,
 } from "../../../../types";
-import { polygonCentroid } from "../../engine/geometry/polygon";
+import { polygonBounds, polygonCentroid } from "../../engine/geometry/polygon";
 
 interface FloorPlanLayerProps {
   plan: FloorPlan;
@@ -31,8 +31,10 @@ const flatten = (points: Array<{ x: number; y: number }>): number[] =>
 
 const RoomShape = ({ room, scale }: { room: FloorPlanRoom; scale: number }) => {
   const center = polygonCentroid(room.boundary.points);
-  const labelWidth = 90 / scale;
-  const labelHeight = 30 / scale;
+  const bounds = polygonBounds(room.boundary.points);
+  const availableWidthPx = Math.max(30, bounds.width * scale - 10);
+  const labelWidth = Math.min(96, availableWidthPx) / scale;
+  const labelHeight = 20 / scale;
 
   return (
     <Fragment>
@@ -41,7 +43,7 @@ const RoomShape = ({ room, scale }: { room: FloorPlanRoom; scale: number }) => {
         closed
         fill={room.role === "solver_placeholder" ? "#f1f5f9" : (ROOM_COLORS[room.roomType] ?? "#fafafa")}
         stroke="#475569"
-        strokeWidth={2.2 / scale}
+        strokeWidth={1.6 / scale}
         lineJoin="round"
         dash={room.role === "solver_placeholder" ? [7 / scale, 4 / scale] : undefined}
         opacity={room.role === "solver_placeholder" ? 0.7 : 1}
@@ -62,7 +64,7 @@ const RoomShape = ({ room, scale }: { room: FloorPlanRoom; scale: number }) => {
         width={labelWidth}
         height={labelHeight}
         text={room.name}
-        fontSize={12 / scale}
+        fontSize={Math.max(8.5, Math.min(11, availableWidthPx / 8)) / scale}
         fontStyle="bold"
         fill="#334155"
         align="center"
@@ -93,24 +95,40 @@ const OpeningShape = ({
       ? "#ea580c"
       : opening.purpose === "secondary_entrance"
         ? "#d97706"
-        : "#7c3aed";
+      : "#7c3aed";
+  const dx = opening.end.x - opening.start.x;
+  const dy = opening.end.y - opening.start.y;
+  const openingLength = Math.hypot(dx, dy) || 1;
+  const normal = { x: -dy / openingLength, y: dx / openingLength };
+  const railOffset = 1.7 / scale;
+  const jamb = 4 / scale;
 
   return (
     <Fragment>
-      <Line
-        points={points}
-        stroke="#ffffff"
-        strokeWidth={(isWindow ? 5 : 8) / scale}
-        lineCap="butt"
-        listening={false}
-      />
-      <Line
-        points={points}
-        stroke={openingColor}
-        strokeWidth={(isWindow ? 2.5 : 3) / scale}
-        lineCap="round"
-        listening={false}
-      />
+      <Line points={points} stroke="#ffffff" strokeWidth={(isWindow ? 8 : 10) / scale} lineCap="butt" listening={false} />
+      {isWindow ? (
+        <>
+          {[-railOffset, railOffset].map((offset) => (
+            <Line key={offset} points={[
+              opening.start.x + normal.x * offset, opening.start.y + normal.y * offset,
+              opening.end.x + normal.x * offset, opening.end.y + normal.y * offset,
+            ]} stroke={openingColor} strokeWidth={2 / scale} lineCap="round" shadowColor={openingColor} shadowBlur={3} listening={false} />
+          ))}
+        </>
+      ) : (
+        <>
+          <Line points={points} stroke={openingColor}
+            strokeWidth={(opening.purpose === "main_entrance" ? 5.5 : 4.5) / scale}
+            lineCap="round" shadowColor={openingColor} shadowBlur={5} shadowOpacity={0.35} listening={false} />
+          {[opening.start, opening.end].map((point, index) => (
+            <Fragment key={`${opening.id}-jamb-${index}`}>
+              <Line points={[point.x - normal.x * jamb, point.y - normal.y * jamb, point.x + normal.x * jamb, point.y + normal.y * jamb]}
+                stroke={openingColor} strokeWidth={2 / scale} listening={false} />
+              <Circle x={point.x} y={point.y} radius={2.2 / scale} fill="#ffffff" stroke={openingColor} strokeWidth={1.4 / scale} listening={false} />
+            </Fragment>
+          ))}
+        </>
+      )}
     </Fragment>
   );
 };
@@ -126,7 +144,7 @@ export const FloorPlanLayer = ({
       closed
       fill="#ffffff"
       stroke="#0f172a"
-      strokeWidth={5 / scale}
+      strokeWidth={4.5 / scale}
       lineJoin="round"
       opacity={opacity}
       listening={false}
@@ -140,7 +158,7 @@ export const FloorPlanLayer = ({
       points={flatten(plan.boundary.points)}
       closed
       stroke="#0f172a"
-      strokeWidth={5 / scale}
+      strokeWidth={4.5 / scale}
       lineJoin="round"
       opacity={opacity}
       listening={false}

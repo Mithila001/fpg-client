@@ -7,14 +7,14 @@ const steps = [
 ];
 const Home = () => (
   <div className="overflow-hidden bg-slate-950 text-white">
-    <section className="relative isolate px-6 pb-24 pt-20 sm:pt-28">
+    <section className="relative isolate px-4 pb-20 pt-14 sm:px-6 sm:pb-24 sm:pt-24">
       <div className="absolute inset-0 -z-10 bg-[radial-gradient(circle_at_20%_10%,rgba(99,102,241,.32),transparent_35%),radial-gradient(circle_at_80%_60%,rgba(14,165,233,.18),transparent_32%)]" />
-      <div className="mx-auto grid max-w-7xl items-center gap-16 lg:grid-cols-[1.05fr_.95fr]">
+      <div className="mx-auto grid max-w-7xl items-center gap-12 lg:grid-cols-[1.05fr_.95fr] lg:gap-16">
         <div>
           <span className="inline-flex items-center gap-2 rounded-full border border-indigo-400/30 bg-indigo-400/10 px-3 py-1.5 text-xs font-bold text-indigo-200">
             <span className="h-1.5 w-1.5 rounded-full bg-emerald-400" /> API v1 connected workflow
           </span>
-          <h1 className="mt-7 max-w-3xl text-5xl font-black leading-[.98] tracking-[-0.045em] sm:text-7xl">
+          <h1 className="mt-7 max-w-3xl text-4xl font-black leading-[1.02] tracking-[-0.04em] sm:text-6xl lg:text-7xl">
             From parcel lines to a plan you can inspect.
           </h1>
           <p className="mt-7 max-w-xl text-lg leading-8 text-slate-300">
@@ -41,7 +41,7 @@ const Home = () => (
         </div>
       </div>
     </section>
-    <section id="workflow" className="border-t border-white/10 bg-white px-6 py-20 text-slate-950">
+    <section id="workflow" className="border-t border-white/10 bg-white px-4 py-16 text-slate-950 sm:px-6 sm:py-20">
       <div className="mx-auto max-w-7xl">
         <p className="text-xs font-black uppercase tracking-[0.22em] text-indigo-600">One continuous workspace</p>
         <h2 className="mt-3 max-w-2xl text-3xl font-black tracking-tight sm:text-4xl">Every server decision remains visible.</h2>

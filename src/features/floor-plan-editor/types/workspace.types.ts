@@ -29,20 +29,30 @@ export interface FloorPlanGenerationDisplay {
 }
 
 export interface FloorPlanWorkspaceControlSlots {
-  landEditorControls: ReactNode;
+  landModificationControls: ReactNode;
+  roadPlacementControls: ReactNode;
+  editorInspector: ReactNode;
   viewerControls: ReactNode;
 }
 
 export type PlanDimensionSide = "outside" | "left" | "right";
+export type PlanDimensionKind = "room-width" | "room-length" | "overall";
+export type PlanDimensionOrientation = "horizontal" | "vertical";
+export type PlanDimensionPlacement = "inside" | "outside";
 
 export interface PlanDimension {
   id: string;
   start: Point;
   end: Point;
+  kind: PlanDimensionKind;
+  orientation: PlanDimensionOrientation;
+  placement: PlanDimensionPlacement;
+  roomId?: string;
+  compactAnchor?: Point;
   label?: string;
   side?: PlanDimensionSide;
   offsetPx?: number;
-  insetRatio?: number;
+  priority?: number;
 }
 
 export interface FloorPlanWorkspaceProps extends FloorPlanEditorProps {

@@ -10,10 +10,12 @@ import { useContainerSize } from "./use-container-size";
 export const FloorPlanCanvas = ({
   bounds,
   fitKey,
+  fitPadding = 48,
   interaction = "navigate",
   showGrid = true,
   blurred = false,
   overlay,
+  legend,
   className = "",
   children,
   onPointerMove,
@@ -22,10 +24,11 @@ export const FloorPlanCanvas = ({
 }: FloorPlanCanvasProps) => {
   const stageRef = useRef<Konva.Stage | null>(null);
   const { ref, size } = useContainerSize();
-  const { viewport, setViewport, fit, zoomAt } = useCanvasViewport(
+  const { viewport, setViewport, fit, zoomAt, markNavigated } = useCanvasViewport(
     bounds,
     size,
     fitKey,
+    fitPadding,
   );
   const locked = interaction === "locked";
   const heightClassName =
@@ -61,7 +64,7 @@ export const FloorPlanCanvas = ({
   return (
     <div
       ref={ref}
-      className={`relative w-full overflow-hidden bg-white ${heightClassName}`}
+      className={`relative isolate w-full overflow-hidden bg-white ${heightClassName}`}
     >
       <div
         className="h-full w-full transition-[filter,transform] duration-200"
@@ -82,6 +85,7 @@ export const FloorPlanCanvas = ({
           draggable={!locked}
           onDragEnd={(event: Konva.KonvaEventObject<DragEvent>) => {
             if (event.target !== stageRef.current) return;
+            markNavigated();
             setViewport((current) => ({
               ...current,
               x: event.target.x(),
@@ -112,7 +116,7 @@ export const FloorPlanCanvas = ({
       </div>
 
       {!locked && (
-        <div className="absolute right-3 top-3 flex flex-col gap-2">
+        <div className="absolute right-3 top-3 z-10 flex flex-col gap-2">
           <button
             type="button"
             onClick={() =>
@@ -156,6 +160,12 @@ export const FloorPlanCanvas = ({
           <span>1 meter</span>
         </span>
       </div>
+
+      {legend && (
+        <div className="pointer-events-none absolute left-3 top-3 z-10 max-w-[calc(100%-5.5rem)]">
+          {legend}
+        </div>
+      )}
 
       {overlay}
     </div>

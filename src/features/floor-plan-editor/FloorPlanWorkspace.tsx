@@ -6,11 +6,11 @@ import { FinalPlanScene } from "./canvas/scenes/FinalPlanScene";
 import { GenerationScene } from "./canvas/scenes/GenerationScene";
 import { LandEditingScene } from "./canvas/scenes/LandEditingScene";
 import { useEditorController } from "./controller/use-editor-controller";
-import { createBoundaryPlanDimensions } from "./display/plan-dimensions";
+import { createPlanDimensions } from "./display/plan-dimensions";
 import { ProcessingOverlay } from "./overlays/ProcessingOverlay";
 import { ResultMessageOverlay } from "./overlays/ResultMessageOverlay";
 import { EditorInspector } from "./panels/EditorInspector";
-import { EditorToolbar } from "./panels/EditorToolbar";
+import { LandModificationToolbar, RoadPlacementToolbar } from "./panels/EditorToolbar";
 import { ViewerToolbar } from "./panels/ViewerToolbar";
 import type { FloorPlanWorkspaceProps } from "./types/workspace.types";
 
@@ -56,7 +56,7 @@ export const FloorPlanWorkspace = ({
 
   const dimensions = useMemo(() => {
     if (planDimensions !== undefined) return planDimensions;
-    return finalPlan ? createBoundaryPlanDimensions(finalPlan) : [];
+    return finalPlan ? createPlanDimensions(finalPlan) : [];
   }, [finalPlan, planDimensions]);
 
   const bounds = useMemo(() => {
@@ -82,7 +82,7 @@ export const FloorPlanWorkspace = ({
       case "no-result":
         return mergeBounds([landBounds, buildableBounds, usableBounds]);
       case "generating":
-        return mergeBounds([landBounds, buildableBounds, usableBounds, candidateBounds, hintBounds]);
+        return mergeBounds([usableBounds, candidateBounds, hintBounds]);
       case "final-plan":
         return finalBounds ?? landBounds;
       default:
@@ -122,24 +122,30 @@ export const FloorPlanWorkspace = ({
     onShowDimensionsChange?.(visible);
   };
 
-  const landEditorControls =
-    phase === "editing-land" ? (
-      <div className="space-y-3">
-        <EditorToolbar
-          mode={editor.state.mode}
-          vertexCount={editor.state.document.boundary.points.length}
-          minVertices={editor.config.minVertices}
-          maxVertices={editor.config.maxVertices}
-          hasRoad={editor.state.document.road !== null}
-          readOnly={readOnly}
-          onModeChange={editor.actions.setMode}
-          onAddVertex={editor.actions.addVertex}
-          onRemoveVertex={editor.actions.removeSelectedVertex}
-          onClearRoad={editor.actions.clearRoad}
-        />
-        <EditorInspector state={editor.state} />
-      </div>
-    ) : null;
+  const landModificationControls = phase === "editing-land" ? (
+    <LandModificationToolbar
+      mode={editor.state.mode}
+      vertexCount={editor.state.document.boundary.points.length}
+      minVertices={editor.config.minVertices}
+      maxVertices={editor.config.maxVertices}
+      readOnly={readOnly}
+      onModeChange={editor.actions.setMode}
+      onAddVertex={editor.actions.addVertex}
+      onRemoveVertex={editor.actions.removeSelectedVertex}
+    />
+  ) : null;
+
+  const roadPlacementControls = phase === "editing-land" ? (
+    <RoadPlacementToolbar
+      mode={editor.state.mode}
+      hasRoad={editor.state.document.road !== null}
+      readOnly={readOnly}
+      onModeChange={editor.actions.setMode}
+      onClearRoad={editor.actions.clearRoad}
+    />
+  ) : null;
+
+  const editorInspector = phase === "editing-land" ? <EditorInspector state={editor.state} /> : null;
 
   const viewerControls =
     phase === "final-plan" && finalPlan ? (
@@ -178,7 +184,15 @@ export const FloorPlanWorkspace = ({
       fitKey={fitKey}
       interaction="navigate"
       showGrid={showGrid}
+      fitPadding={phase === "final-plan" && dimensionsVisible ? 88 : 48}
       overlay={canvasOverlay}
+      legend={phase === "final-plan" && finalPlan ? (
+        <div className="flex flex-wrap gap-x-3 gap-y-1 rounded-lg border border-slate-200/80 bg-white/90 px-2.5 py-2 text-[9px] font-bold text-slate-600 shadow-sm backdrop-blur">
+          <span className="flex items-center gap-1"><span className="h-0.5 w-3 bg-orange-600" /> Main entrance</span>
+          <span className="flex items-center gap-1"><span className="h-0.5 w-3 bg-violet-600" /> Door</span>
+          <span className="flex items-center gap-1"><span className="h-0.5 w-3 bg-sky-600" /> Window</span>
+        </div>
+      ) : undefined}
       className={canvasClassName}
       onPointerMove={
         editingEnabled && editor.state.mode === "place-road"
@@ -225,17 +239,12 @@ export const FloorPlanWorkspace = ({
             );
           case "generating":
             return (
-              <>
-                <BuildableReviewScene
-                  landBoundary={landBoundary}
-                  road={editor.state.document.road}
-                  result={buildableResult}
-                  scale={scale}
-                  showDimensions={false}
-                  muted
-                />
-                <GenerationScene hints={hints} candidatePlan={candidatePlan} scale={scale} />
-              </>
+              <GenerationScene
+                hints={hints}
+                candidatePlan={candidatePlan}
+                floorBoundary={buildableResult?.usableLand.boundary.points}
+                scale={scale}
+              />
             );
           case "final-plan":
             return finalPlan ? (
@@ -266,18 +275,20 @@ export const FloorPlanWorkspace = ({
     <section
       className={
         renderSidePanel
-          ? `grid min-h-0 lg:grid-cols-[minmax(0,1fr)_380px] ${className}`
+          ? `grid min-h-0 lg:grid-cols-[minmax(0,1fr)_clamp(320px,26vw,410px)] ${className}`
           : `space-y-3 ${className}`
       }
     >
       {renderSidePanel ? (
         <>
           <div className="min-h-0 min-w-0">{canvas}</div>
-          {renderSidePanel({ landEditorControls, viewerControls })}
+          {renderSidePanel({ landModificationControls, roadPlacementControls, editorInspector, viewerControls })}
         </>
       ) : (
         <>
-          {landEditorControls}
+          {landModificationControls}
+          {roadPlacementControls}
+          {editorInspector}
           {viewerControls}
           {canvas}
         </>

@@ -18,5 +18,8 @@ export type {
   FloorPlanWorkspaceProps,
   GenerationProgressDisplay,
   PlanDimension,
+  PlanDimensionKind,
+  PlanDimensionOrientation,
+  PlanDimensionPlacement,
   PlanDimensionSide,
 } from "./types/workspace.types";

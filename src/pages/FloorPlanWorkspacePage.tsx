@@ -5,7 +5,7 @@ import {
 } from "../features/floor-plan-editor";
 import {
   generationReducer, initialGenerationState, loadPersistedGeneration, persistGeneration,
-  RoomRequirementsDialog, WorkflowSidebar, type FloorPlanRequirements,
+  resolveWorkspacePhase, RoomRequirementsDialog, WorkflowSidebar, type FloorPlanRequirements,
   type WorkflowErrorInfo, type WorkflowTab,
 } from "../features/floor-plan-workflow";
 import { PROJECT_AREA_UNITS_PER_SQUARE_METER } from "../measurement";
@@ -64,6 +64,7 @@ const FloorPlanWorkspacePage = () => {
   const [targetAreaInput, setTargetAreaInput] = useState(() => (area((saved?.request ?? INITIAL_LAND).landBoundary.points) / 100).toFixed(0));
   const [requirementsOpen, setRequirementsOpen] = useState(false);
   const [findingBuildable, setFindingBuildable] = useState(false);
+  const [startingGeneration, setStartingGeneration] = useState(false);
   const [loadingMetadata, setLoadingMetadata] = useState(true);
   const [error, setError] = useState<WorkflowErrorInfo | null>(null);
   const [generation, dispatch] = useReducer(generationReducer, undefined, () => loadPersistedGeneration() ?? initialGenerationState);
@@ -156,11 +157,13 @@ const FloorPlanWorkspacePage = () => {
   const generate = async () => {
     if (!requirements || !buildableResult) return;
     subscriptionRef.current?.close(); subscriptionRef.current = null; dispatch({ type: "reset" }); setError(null);
+    setStartingGeneration(true);
     try {
       const job = await createFloorPlanJob({ floorLimits: { maxWidth: requirements.floorWidth, maxLength: requirements.floorLength },
         aspectRatio, rooms: requirements.rooms.filter((room) => room.roomType !== "hallway") });
       dispatch({ type: "job_created", descriptor: job }); connect(job);
     } catch (requestError) { setError(errorInfo(requestError)); }
+    finally { setStartingGeneration(false); }
   };
   const cancel = async () => {
     if (!generation.descriptor) return; setError(null);
@@ -171,6 +174,21 @@ const FloorPlanWorkspacePage = () => {
     }
   };
   const reset = () => { subscriptionRef.current?.close(); subscriptionRef.current = null; dispatch({ type: "reset" }); setError(null); };
+  const startFresh = () => {
+    if (generation.descriptor && activeViews.has(generation.view)) {
+      void cancelFloorPlanGeneration(generation.descriptor).catch(() => { /* Local reset should not be blocked by a cancellation race. */ });
+    }
+    subscriptionRef.current?.close(); subscriptionRef.current = null;
+    const fresh = createWorkspaceSnapshot(INITIAL_LAND);
+    setSnapshot(fresh); setBuildableResult(null); setRequirements(null); setActiveTab("land");
+    if (metadata) {
+      setRoadType(metadata.roadTypes.find((road) => road.value === "main_road")?.value ?? metadata.roadTypes[0]?.value ?? "main_road");
+      setAspectRatio(metadata.compatibleAspectRatios.find((ratio) => ratio.label === "1:1")?.label ?? metadata.compatibleAspectRatios[0]?.label ?? "1:1");
+    }
+    setTargetAreaInput((area(INITIAL_LAND.landBoundary.points) / PROJECT_AREA_UNITS_PER_SQUARE_METER).toFixed(0));
+    setRequirementsOpen(false); setFindingBuildable(false); setStartingGeneration(false); setError(null);
+    dispatch({ type: "reset" });
+  };
 
   if (!metadata) return (
     <div className="flex flex-1 items-center justify-center bg-slate-950 p-6 text-white">
@@ -188,8 +206,14 @@ const FloorPlanWorkspacePage = () => {
   const visibleResult = completedResult ?? (generation.showBestAvailable ? bestResult : null);
   const adverse = generation.view === "failed" || generation.view === "cancelled" || generation.view === "expired" ||
     (generation.view === "timed_out" && !generation.showBestAvailable);
-  const phase: FloorPlanWorkspacePhase = activeViews.has(generation.view) ? "generating" :
-    visibleResult ? "final-plan" : adverse ? "no-result" : buildableResult ? "buildable-review" : "editing-land";
+  const phase: FloorPlanWorkspacePhase = resolveWorkspacePhase({
+    activeTab,
+    generationActive: activeViews.has(generation.view),
+    startingGeneration,
+    hasVisibleResult: visibleResult !== null,
+    adverseResult: adverse,
+    hasBuildableResult: buildableResult !== null,
+  });
   const terminalOverlay = adverse ? (
     <div className="absolute inset-0 z-30 flex items-center justify-center bg-slate-950/25 p-4 backdrop-blur-[2px]">
       <div className="w-full max-w-md rounded-3xl border border-white/70 bg-white/95 p-6 text-center shadow-2xl">
@@ -203,29 +227,31 @@ const FloorPlanWorkspacePage = () => {
       </div>
     </div>
   ) : visibleResult && generation.view === "timed_out" ? (
-    <div className="pointer-events-none absolute left-1/2 top-4 z-20 -translate-x-1/2 rounded-full bg-amber-500 px-4 py-2 text-xs font-bold text-white shadow-lg">Best available · incomplete timeout result</div>
+    <div className="pointer-events-none absolute bottom-16 left-1/2 z-20 max-w-[calc(100%-2rem)] -translate-x-1/2 rounded-full bg-amber-500 px-4 py-2 text-center text-xs font-bold text-white shadow-lg">Best available · incomplete timeout result</div>
   ) : null;
 
   return (
     <div className="flex min-h-0 flex-1 flex-col bg-slate-100 lg:overflow-hidden">
       <FloorPlanWorkspace
         phase={phase} value={snapshot.value} onChange={handleEditorChange}
-        readOnly={findingBuildable || buildableResult !== null || generation.view !== "idle"}
+        readOnly={findingBuildable || startingGeneration || buildableResult !== null || generation.view !== "idle"}
         buildableResult={buildableResult}
-        generation={activeViews.has(generation.view) ? { message: generation.message, hints: generation.hints,
+        generation={startingGeneration ? { message: "Starting the floor-plan generator…", hints: [], candidatePlan: null } : activeViews.has(generation.view) ? { message: generation.message, hints: generation.hints,
           candidatePlan: generation.intermediatePlan, progress: { current: generation.trialNumber ?? undefined, total: generation.trialLimit ?? undefined, label: generation.stage ?? undefined } } : null}
-        finalPlan={visibleResult?.floorPlan ?? null} defaultShowDimensions canvasOverlay={terminalOverlay}
-        className="min-h-0 flex-1 lg:h-full" canvasClassName="h-[58vh] min-h-[420px] border-b border-slate-200 lg:h-full lg:min-h-0 lg:border-b-0"
-        renderSidePanel={({ landEditorControls, viewerControls }) => (
+        finalPlan={visibleResult?.floorPlan ?? null} defaultShowDimensions canvasOverlay={activeTab === "generate" ? terminalOverlay : null}
+        className="min-h-0 flex-1 lg:h-full" canvasClassName="h-[52dvh] min-h-[360px] max-h-[620px] border-b border-slate-200 lg:h-full lg:max-h-none lg:min-h-0 lg:border-b-0"
+        renderSidePanel={({ landModificationControls, roadPlacementControls, editorInspector, viewerControls }) => (
           <WorkflowSidebar activeTab={activeTab} metadata={metadata} buildableResult={buildableResult}
             requirements={requirements} roadType={roadType} targetAreaInput={targetAreaInput} landArea={area(snapshot.value.landBoundary.points)}
-            aspectRatio={aspectRatio} generation={generation} error={error} landEditorControls={landEditorControls}
+            aspectRatio={aspectRatio} generation={generation} error={error} landModificationControls={landModificationControls}
+            roadPlacementControls={roadPlacementControls} editorInspector={editorInspector}
             viewerControls={viewerControls} landValid={snapshot.isValid} findingBuildable={findingBuildable}
-            onTabChange={setActiveTab} onTargetAreaInputChange={setTargetAreaInput} onApplyTargetArea={applyTargetArea}
+            startingGeneration={startingGeneration}
+            onTabChange={setActiveTab} onStartFresh={startFresh} onTargetAreaInputChange={setTargetAreaInput} onApplyTargetArea={applyTargetArea}
             onRoadTypeChange={(value) => { setRoadType(value); setSnapshot(createWorkspaceSnapshot({ ...snapshot.value, roads: snapshot.value.roads.map((road) => ({ ...road, roadType: value })) })); if (buildableResult) invalidateLand(); }}
             onFindBuildableSpace={() => void findBuildable()} onEditLand={() => { invalidateLand(); setActiveTab("land"); }}
             onAspectRatioChange={setAspectRatio} onOpenRequirements={() => setRequirementsOpen(true)}
-            onGenerate={() => void generate()} onCancel={() => void cancel()} onReset={reset} />
+            onGenerate={() => void generate()} onCancel={() => void cancel()} />
         )} />
       {buildableResult && <RoomRequirementsDialog open={requirementsOpen} metadata={metadata}
         maxWidth={buildableResult.usableLand.width} maxLength={buildableResult.usableLand.length}

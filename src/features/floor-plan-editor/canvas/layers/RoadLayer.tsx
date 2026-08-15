@@ -22,8 +22,8 @@ export const RoadLayer = ({ boundary, road, preview, scale }: RoadLayerProps) =>
         <Line
           points={flatten(roadPolygon)}
           closed
-          fill="#334155"
-          stroke="#0f172a"
+          fill="#334155b8"
+          stroke="#0f172acc"
           strokeWidth={1 / scale}
           listening={false}
         />

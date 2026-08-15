@@ -11,26 +11,17 @@ export const EditorInspector = ({ state }: EditorInspectorProps) => {
   const selected = state.selection?.index;
 
   return (
-    <aside className="space-y-4 rounded-xl border border-slate-200 bg-white p-4">
-      <div>
-        <h3 className="text-sm font-semibold text-slate-900">Editor state</h3>
-        <p className="mt-1 text-xs text-slate-500">Feature-private interaction state stays inside this module.</p>
-      </div>
-
-      <dl className="grid grid-cols-2 gap-3 text-sm">
-        <div className="rounded-lg bg-slate-50 p-3">
+    <div className="space-y-3">
+      <dl className="grid grid-cols-2 gap-2 text-sm">
+        <div className="rounded-xl bg-slate-50 p-3">
           <dt className="text-xs text-slate-500">Area</dt>
           <dd className="mt-1 font-semibold text-slate-900">{formatProjectArea(area, "square-meter", { maximumFractionDigits: 2 })}</dd>
         </div>
-        <div className="rounded-lg bg-slate-50 p-3">
-          <dt className="text-xs text-slate-500">Mode</dt>
-          <dd className="mt-1 font-semibold text-slate-900">{state.mode}</dd>
-        </div>
-        <div className="rounded-lg bg-slate-50 p-3">
+        <div className="rounded-xl bg-slate-50 p-3">
           <dt className="text-xs text-slate-500">Selected</dt>
           <dd className="mt-1 font-semibold text-slate-900">{selected === undefined ? "None" : `Vertex ${selected + 1}`}</dd>
         </div>
-        <div className="rounded-lg bg-slate-50 p-3">
+        <div className="rounded-xl bg-slate-50 p-3">
           <dt className="text-xs text-slate-500">Road</dt>
           <dd className="mt-1 font-semibold text-slate-900">{state.document.road ? `Edge ${state.document.road.edgeIndex + 1}` : "Not placed"}</dd>
         </div>
@@ -47,6 +38,6 @@ export const EditorInspector = ({ state }: EditorInspectorProps) => {
           {state.validation.issues.map((issue) => <p key={issue.code}>{issue.message}</p>)}
         </div>
       )}
-    </aside>
+    </div>
   );
 };

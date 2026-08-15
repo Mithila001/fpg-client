@@ -8,3 +8,4 @@ export type {
   WorkflowErrorInfo,
   WorkflowTab,
 } from "./workflow.types";
+export { resolveWorkspacePhase } from "./workspace-phase";

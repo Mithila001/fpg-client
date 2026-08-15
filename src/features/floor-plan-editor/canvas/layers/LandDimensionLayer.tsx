@@ -1,4 +1,4 @@
-import { Arrow, Group, Text } from "react-konva";
+import { Arrow, Group, Rect, Text } from "react-konva";
 import type { Point } from "../../../../types";
 import { formatProjectLength } from "../../../../measurement";
 import { polygonCentroid } from "../../engine/geometry/polygon";
@@ -7,6 +7,10 @@ import { distance } from "../../engine/geometry/vector";
 interface LandDimensionLayerProps {
   points: Point[];
   scale: number;
+  color?: string;
+  offsetPx?: number;
+  placement?: "inside" | "outside";
+  edgeIndexes?: number[];
 }
 
 const DIMENSION_END_INSET_RATIO = 0.1;
@@ -14,12 +18,17 @@ const DIMENSION_END_INSET_RATIO = 0.1;
 export const LandDimensionLayer = ({
   points,
   scale,
+  color = "#64748b",
+  offsetPx = 22,
+  placement = "outside",
+  edgeIndexes,
 }: LandDimensionLayerProps) => {
   const centroid = polygonCentroid(points);
 
   return (
     <Group listening={false}>
       {points.map((start, index) => {
+        if (edgeIndexes && !edgeIndexes.includes(index)) return null;
         const end = points[(index + 1) % points.length];
         const dx = end.x - start.x;
         const dy = end.y - start.y;
@@ -36,10 +45,10 @@ export const LandDimensionLayer = ({
           x: midpoint.x - centroid.x,
           y: midpoint.y - centroid.y,
         };
-        const direction =
-          normal.x * fromCenter.x + normal.y * fromCenter.y > 0 ? 1 : -1;
-        const offset = 22 / scale;
-        const labelOffset = 12 / scale;
+        const outwardDirection = normal.x * fromCenter.x + normal.y * fromCenter.y > 0 ? 1 : -1;
+        const direction = placement === "inside" ? -outwardDirection : outwardDirection;
+        const offset = offsetPx / scale;
+        const labelOffset = 9 / scale;
         const nx = normal.x * direction;
         const ny = normal.y * direction;
         const endInset = length * DIMENSION_END_INSET_RATIO;
@@ -67,22 +76,24 @@ export const LandDimensionLayer = ({
               pointerAtEnding
               pointerWidth={5 / scale}
               pointerLength={5 / scale}
-              stroke="#64748b"
+              stroke={color}
               strokeWidth={1 / scale}
             />
-            <Text
-              x={label.x}
-              y={label.y}
-              text={formatProjectLength(distance(start, end), "meter", {
-                maximumFractionDigits: 2,
-              })}
-              fontSize={12 / scale}
-              fontStyle="bold"
-              fill="#334155"
-              rotation={rotation}
-              offsetX={28 / scale}
-              offsetY={7 / scale}
-            />
+            <Group x={label.x} y={label.y} rotation={rotation}>
+              <Rect x={-29 / scale} y={-8 / scale} width={58 / scale} height={16 / scale}
+                fill="#ffffffeb" cornerRadius={3 / scale} />
+              <Text
+                x={-29 / scale}
+                y={-6 / scale}
+                width={58 / scale}
+                height={12 / scale}
+                text={formatProjectLength(distance(start, end), "meter", { maximumFractionDigits: 2 })}
+                fontSize={10 / scale}
+                fontStyle="bold"
+                fill={color}
+                align="center"
+              />
+            </Group>
           </Group>
         );
       })}

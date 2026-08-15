@@ -224,14 +224,14 @@ export const RoomRequirementsDialog = ({
           : "border-slate-200 bg-slate-50 text-slate-500";
 
   return (
-    <div className="fixed inset-0 z-[80] flex items-center justify-center bg-slate-950/45 p-4 backdrop-blur-sm">
+    <div className="fixed inset-0 z-[80] flex items-center justify-center bg-slate-950/45 p-2 backdrop-blur-sm sm:p-4">
       <div
         role="dialog"
         aria-modal="true"
         aria-labelledby="room-requirements-title"
-        className="max-h-[92vh] w-full max-w-3xl overflow-hidden rounded-2xl border border-white/70 bg-white shadow-2xl"
+        className="flex max-h-[calc(100dvh-1rem)] w-full max-w-3xl flex-col overflow-hidden rounded-2xl border border-white/70 bg-white shadow-2xl sm:max-h-[92dvh]"
       >
-        <header className="flex items-start justify-between gap-4 border-b border-slate-200 px-6 py-5">
+        <header className="flex items-start justify-between gap-3 border-b border-slate-200 px-4 py-4 sm:px-6 sm:py-5">
           <div>
             <p className="text-xs font-semibold uppercase tracking-[0.18em] text-indigo-600">
               Generation requirements
@@ -255,7 +255,7 @@ export const RoomRequirementsDialog = ({
           </button>
         </header>
 
-        <div className="max-h-[calc(92vh-150px)] space-y-5 overflow-y-auto px-6 py-5">
+        <div className="min-h-0 flex-1 space-y-5 overflow-y-auto px-4 py-4 sm:px-6 sm:py-5">
           <section className="grid gap-4 rounded-xl border border-slate-200 bg-slate-50 p-4 sm:grid-cols-2">
             <label className="text-sm font-semibold text-slate-700">
               Floor width (m)
@@ -385,7 +385,7 @@ export const RoomRequirementsDialog = ({
           )}
         </div>
 
-        <footer className="flex justify-end gap-3 border-t border-slate-200 bg-slate-50 px-6 py-4">
+        <footer className="flex flex-wrap justify-end gap-2 border-t border-slate-200 bg-slate-50 px-4 py-3 sm:gap-3 sm:px-6 sm:py-4">
           <button
             type="button"
             onClick={onClose}
